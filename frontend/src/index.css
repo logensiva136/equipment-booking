@@ -1,0 +1,21 @@
+/* Minimal base layer — Bootstrap's Reboot already handles box-sizing,
+   margins, etc. This file only sets what Bootstrap doesn't: default
+   font family and reduced-motion support. Everything else is styled
+   with inline Bootstrap + Tailwind-color utility classes in components. */
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
