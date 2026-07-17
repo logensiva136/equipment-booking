@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: '/steps', label: 'Step Tracker' },
   { to: '/bookings', label: 'Booking History' },
   { to: '/guide', label: 'BMI & Exercise' },
+  { to: '/chat', label: 'Chat & Rewards' },
 ]
 
 function navLinkStyle(isActive) {

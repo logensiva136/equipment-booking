@@ -106,7 +106,7 @@ export default function AdminSetup() {
             {form.companyAbbr}&rsquo;s admin account for <strong>{form.name}</strong> is ready. You can sign in with
             username <strong>{form.username}</strong>.
           </p>
-          <button type="button" className="btn rounded-2 fw-semibold px-4 mt-2" style={orangeBtnVars} onClick={() => navigate('/login')}>
+          <button type="button" className="btn rounded-2 fw-semibold px-4 mt-2" style={orangeBtnVars} onClick={() => navigate('/admin/login')}>
             Go to login
           </button>
         </div>
