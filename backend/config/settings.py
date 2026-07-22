@@ -10,22 +10,43 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Loads backend/.env if present (gitignored, per-environment). Values set
+# in the real environment (e.g. by the hosting platform) always win over
+# the file, since load_dotenv() doesn't override existing os.environ keys.
+load_dotenv(BASE_DIR / '.env')
+
+
+def _bool_env(name, default):
+    return os.environ.get(name, str(default)).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _list_env(name, default):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return [item.strip() for item in raw.split(',') if item.strip()]
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-2go)ot9$*v84%#2)w3dxnz$f&&58y^#)+q+njr1+x8%%=x_7$4'
+# SECURITY WARNING: keep the secret key used in production secret! Set
+# DJANGO_SECRET_KEY in the environment for any real deployment -- this
+# fallback is only safe for local dev.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-2go)ot9$*v84%#2)w3dxnz$f&&58y^#)+q+njr1+x8%%=x_7$4')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = _bool_env('DJANGO_DEBUG', True)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = _list_env('DJANGO_ALLOWED_HOSTS', [])
 
 
 # Application definition
@@ -152,18 +173,14 @@ ACCOUNT_SIGNUP_FIELDS = ['username*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'none'
 ACCOUNT_UNIQUE_EMAIL = False
 
-# CORS / CSRF for the Vite dev server talking to Django on a different origin.
+# CORS / CSRF for the frontend talking to Django on a different origin.
 # Cookies are the auth mechanism (see accounts/api.py), so credentials must
-# be allowed and the frontend origin must be explicit (not '*').
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-]
+# be allowed and the frontend origin must be explicit (not '*'). Defaults
+# match the local Vite dev server; set these in the environment for any
+# real deployment (the production frontend's actual origin).
+CORS_ALLOWED_ORIGINS = _list_env('CORS_ALLOWED_ORIGINS', ['http://localhost:5173', 'http://127.0.0.1:5173'])
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-]
+CSRF_TRUSTED_ORIGINS = _list_env('CSRF_TRUSTED_ORIGINS', ['http://localhost:5173', 'http://127.0.0.1:5173'])
 
 # Dev-only: prints outgoing mail (password reset links) to the runserver
 # console instead of actually sending it. Swap for a real backend in prod.
