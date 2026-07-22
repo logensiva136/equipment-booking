@@ -18,19 +18,25 @@ function iconFor(key) {
   return ICON_OPTIONS.find((opt) => opt.key === key)?.Icon ?? ICON_OPTIONS[0].Icon
 }
 
+// This page manages the equipment *catalogue* only -- what exists and
+// whether it's listed for booking at all (e.g. pulled for repair).
+// Who's currently holding an item, and the pending/active/completed
+// booking lifecycle around the ID card handover, lives in Manage
+// Bookings instead -- keeping one source of truth for that state
+// rather than duplicating it here.
 // Mock catalogue -- real data via GET/POST/PATCH/DELETE /api/admin/equipment.
 const INITIAL_EQUIPMENT = [
-  { id: 'badminton-racket', name: 'Badminton Racket', iconKey: 'racket', available: true, borrower: null },
-  { id: 'basketball', name: 'Basketball', iconKey: 'ball-orange', available: true, borrower: null },
-  { id: 'futsal-ball', name: 'Futsal Ball', iconKey: 'ball-teal', available: true, borrower: null },
-  { id: 'table-tennis-paddle', name: 'Table Tennis Paddle', iconKey: 'paddle', available: true, borrower: null },
-  { id: 'jump-rope', name: 'Jump Rope', iconKey: 'rope', available: true, borrower: null },
-  { id: 'football', name: 'Football', iconKey: 'ball-dark', available: false, borrower: { name: 'Ahmad Faiz', id: '21DTK21F1002' } },
-  { id: 'volleyball', name: 'Volleyball', iconKey: 'ball-amber', available: false, borrower: { name: 'Nur Aisyah', id: 'STF-0031' } },
-  { id: 'frisbee', name: 'Frisbee', iconKey: 'frisbee', available: false, borrower: { name: 'Haziq Rahman', id: '21DEE22F0456' } },
+  { id: 'badminton-racket', name: 'Badminton Racket', iconKey: 'racket', listed: true },
+  { id: 'basketball', name: 'Basketball', iconKey: 'ball-orange', listed: true },
+  { id: 'futsal-ball', name: 'Futsal Ball', iconKey: 'ball-teal', listed: true },
+  { id: 'table-tennis-paddle', name: 'Table Tennis Paddle', iconKey: 'paddle', listed: true },
+  { id: 'jump-rope', name: 'Jump Rope', iconKey: 'rope', listed: true },
+  { id: 'football', name: 'Football', iconKey: 'ball-dark', listed: true },
+  { id: 'volleyball', name: 'Volleyball', iconKey: 'ball-amber', listed: true },
+  { id: 'frisbee', name: 'Frisbee', iconKey: 'frisbee', listed: true },
 ]
 
-const emptyForm = { name: '', iconKey: ICON_OPTIONS[0].key, available: true }
+const emptyForm = { name: '', iconKey: ICON_OPTIONS[0].key, listed: true }
 
 export default function AdminEquipment() {
   const [items, setItems] = useState(INITIAL_EQUIPMENT)
@@ -53,7 +59,7 @@ export default function AdminEquipment() {
 
   const openEditModal = (item) => {
     setEditingId(item.id)
-    setForm({ name: item.name, iconKey: item.iconKey, available: item.available })
+    setForm({ name: item.name, iconKey: item.iconKey, listed: item.listed })
     setModalOpen(true)
   }
 
@@ -65,18 +71,13 @@ export default function AdminEquipment() {
     // TODO: POST /api/admin/equipment (new) or PATCH /api/admin/equipment/:id (edit).
     if (editingId) {
       setItems((prev) =>
-        prev.map((it) => (it.id === editingId ? { ...it, name: form.name, iconKey: form.iconKey, available: form.available } : it))
+        prev.map((it) => (it.id === editingId ? { ...it, name: form.name, iconKey: form.iconKey, listed: form.listed } : it))
       )
     } else {
       const id = form.name.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-      setItems((prev) => [...prev, { id: id || `item-${Date.now()}`, name: form.name, iconKey: form.iconKey, available: form.available, borrower: null }])
+      setItems((prev) => [...prev, { id: id || `item-${Date.now()}`, name: form.name, iconKey: form.iconKey, listed: form.listed }])
     }
     setModalOpen(false)
-  }
-
-  const markReturned = (id) => {
-    // TODO: PATCH /api/admin/equipment/:id, clearing the active booking too.
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, available: true, borrower: null } : it)))
   }
 
   const deleteItem = (id) => {
@@ -111,8 +112,9 @@ export default function AdminEquipment() {
             <h1 className="fw-semibold mb-2" style={{ ...fontDisplay, fontSize: 'clamp(2rem, 4vw, 2.8rem)' }}>
               Manage equipment
             </h1>
-            <p className="text-body-secondary mb-0" style={{ maxWidth: '48ch' }}>
-              Add new gear, and mark items returned or unavailable.
+            <p className="text-body-secondary mb-0" style={{ maxWidth: '52ch' }}>
+              Add or edit gear in the catalogue. Live availability per slot, and returning items, happen in{' '}
+              <strong>Manage Bookings</strong>.
             </p>
           </div>
           <button type="button" className="btn rounded-2 fw-semibold px-4" style={orangeBtnVars} onClick={openAddModal}>
@@ -140,7 +142,7 @@ export default function AdminEquipment() {
                   Name
                 </th>
                 <th className="small text-uppercase text-body-secondary fw-semibold" style={fontMono}>
-                  Status
+                  Catalogue status
                 </th>
                 <th className="small text-uppercase text-body-secondary fw-semibold text-end" style={fontMono}>
                   Actions
@@ -165,26 +167,16 @@ export default function AdminEquipment() {
                       <span
                         className="badge rounded-pill"
                         style={
-                          item.available
+                          item.listed
                             ? { backgroundColor: 'var(--tw-teal-700)', color: '#fff' }
                             : { backgroundColor: 'var(--tw-neutral-200)', color: 'var(--tw-neutral-700)' }
                         }
                       >
-                        {item.available ? 'Available' : 'In use'}
+                        {item.listed ? 'Listed' : 'Unlisted'}
                       </span>
-                      {!item.available && item.borrower && (
-                        <span className="d-block small text-body-secondary mt-1">
-                          {item.borrower.name} ({item.borrower.id})
-                        </span>
-                      )}
                     </td>
                     <td className="text-end">
                       <div className="d-inline-flex gap-2">
-                        {!item.available && (
-                          <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => markReturned(item.id)}>
-                            Mark returned
-                          </button>
-                        )}
                         <button type="button" className="btn btn-outline-dark btn-sm" onClick={() => openEditModal(item)}>
                           Edit
                         </button>
@@ -259,12 +251,12 @@ export default function AdminEquipment() {
                     <input
                       type="checkbox"
                       className="form-check-input"
-                      id="eq-available"
-                      checked={form.available}
-                      onChange={(e) => setForm((prev) => ({ ...prev, available: e.target.checked }))}
+                      id="eq-listed"
+                      checked={form.listed}
+                      onChange={(e) => setForm((prev) => ({ ...prev, listed: e.target.checked }))}
                     />
-                    <label className="form-check-label small" htmlFor="eq-available">
-                      Available for booking
+                    <label className="form-check-label small" htmlFor="eq-listed">
+                      Listed for booking (uncheck to pull it, e.g. for repair)
                     </label>
                   </div>
                 </div>

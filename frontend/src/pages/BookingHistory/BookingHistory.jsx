@@ -3,10 +3,14 @@ import AppHeader from '../../components/AppHeader.jsx'
 import { fontDisplay, fontMono, tealCheckVars } from '../../theme.js'
 
 // Mock history -- real data comes from GET /api/bookings/mine once the
-// Django Ninja backend exists.
+// Django Ninja backend exists. Statuses follow the ID-card handover
+// process: a booking starts 'pending' until admin collects the card
+// and releases the item ('active'), then 'completed' once it's
+// returned and the card is handed back -- or 'cancelled' at any point
+// before that.
 const INITIAL_BOOKINGS = [
-  { id: 'bk-1', equipment: 'Badminton Racket', slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '18 Jul 2026', status: 'upcoming' },
-  { id: 'bk-2', equipment: 'Table Tennis Paddle', slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '20 Jul 2026', status: 'upcoming' },
+  { id: 'bk-1', equipment: 'Badminton Racket', slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '18 Jul 2026', status: 'pending' },
+  { id: 'bk-2', equipment: 'Table Tennis Paddle', slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '20 Jul 2026', status: 'active' },
   { id: 'bk-3', equipment: 'Basketball', slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '11 Jul 2026', status: 'completed' },
   { id: 'bk-4', equipment: 'Jump Rope', slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '7 Jul 2026', status: 'completed' },
   { id: 'bk-5', equipment: 'Futsal Ball', slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '2 Jul 2026', status: 'completed' },
@@ -15,30 +19,36 @@ const INITIAL_BOOKINGS = [
 
 const FILTERS = [
   { key: 'all', label: 'All' },
-  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'active', label: 'Active' },
   { key: 'completed', label: 'Completed' },
   { key: 'cancelled', label: 'Cancelled' },
 ]
 
-const STATUS_STYLE = {
-  upcoming: { backgroundColor: 'var(--tw-teal-700)', color: '#fff', label: 'Upcoming' },
-  completed: null, // uses Bootstrap's own secondary-subtle classes
-  cancelled: null, // uses Bootstrap's own danger-subtle classes
+const STATUS_HELP = {
+  pending: 'Awaiting ID card handover at the counter',
+  active: 'Card is held at the counter until you return it',
 }
 
 function StatusBadge({ status }) {
+  if (status === 'pending') {
+    return (
+      <span className="badge rounded-pill" style={{ backgroundColor: 'var(--tw-sky-100)', color: 'var(--tw-sky-700)' }}>
+        Pending
+      </span>
+    )
+  }
+  if (status === 'active') {
+    return (
+      <span className="badge rounded-pill" style={{ backgroundColor: 'var(--tw-teal-700)', color: '#fff' }}>
+        Active
+      </span>
+    )
+  }
   if (status === 'completed') {
     return <span className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">Completed</span>
   }
-  if (status === 'cancelled') {
-    return <span className="badge rounded-pill bg-danger-subtle text-danger-emphasis">Cancelled</span>
-  }
-  const style = STATUS_STYLE[status]
-  return (
-    <span className="badge rounded-pill" style={style}>
-      {style.label}
-    </span>
-  )
+  return <span className="badge rounded-pill bg-danger-subtle text-danger-emphasis">Cancelled</span>
 }
 
 export default function BookingHistory() {
@@ -48,7 +58,10 @@ export default function BookingHistory() {
   const filtered = filter === 'all' ? bookings : bookings.filter((b) => b.status === filter)
 
   const cancelBooking = (id) => {
-    // TODO: DELETE /api/bookings/:id on the Django Ninja backend.
+    // TODO: PATCH /api/bookings/:id { status: 'cancelled' } on the
+    // Django Ninja backend. Only allowed while still pending -- once
+    // an admin has released the item, cancelling it isn't a
+    // self-service action any more.
     setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' } : b)))
   }
 
@@ -128,9 +141,14 @@ export default function BookingHistory() {
                     <td>{b.date}</td>
                     <td>
                       <StatusBadge status={b.status} />
+                      {STATUS_HELP[b.status] && (
+                        <span className="d-block small text-body-secondary mt-1" style={{ maxWidth: '16rem' }}>
+                          {STATUS_HELP[b.status]}
+                        </span>
+                      )}
                     </td>
                     <td className="text-end">
-                      {b.status === 'upcoming' && (
+                      {b.status === 'pending' && (
                         <button
                           type="button"
                           className="btn btn-outline-secondary btn-sm"

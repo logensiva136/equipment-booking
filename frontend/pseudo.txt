@@ -1,0 +1,142 @@
+FITPOLY - HOW THE APP WORKS
+(Simple step-by-step guide, no technical terms)
+
+1. First time opening the app
+   1. Show welcome screens (what the app can do)
+   2. User taps through the screens
+   3. User chooses "Log in" or "Create account"
+
+2. Admin setup (only happens once, before anyone else can use the app)
+   1. Enter admin name, username, email, password
+   2. Enter company/campus name (short form fills in by itself, can be changed)
+   3. Submit
+      1. Success -> show "setup complete" -> go to admin login page
+      2. Fail -> show what is missing or wrong
+
+3. Register (for students and staff)
+   1. Choose "Student" or "Staff"
+   2. Enter name, ID number, email, phone number, password
+   3. Upload a photo of ID card (Matrix card / Staff card)
+   4. Enter gender, height, weight
+   5. Submit
+      1. Success -> show "you're in" message -> go to login page
+      2. Fail -> show what is missing or wrong
+
+4. Login (for students and staff)
+   1. Enter username (Student ID or Staff ID) and password
+   2. Tick "Remember me" (optional)
+   3. Submit
+      1. Success -> go to Book Equipment page
+      2. Fail -> show error message
+   4. Tap "Forgot password?" -> go to Reset Password page
+
+5. Admin login
+   1. Enter admin username and password
+   2. Submit
+      1. Success -> go to Admin Dashboard
+      2. Fail -> show error message
+
+6. Reset password
+   1. Enter email
+   2. Submit -> show "check your email" message
+   3. Can tap "resend" after 30 seconds
+
+7. Book Equipment
+   1. See list of equipment (photo, name, available or not)
+   2. Equipment that is fully booked is greyed out and shown at the bottom
+   3. Tap an available item
+   4. See two time slots:
+      1. Monday & Thursday, 5:00pm - 6:30pm
+      2. Tuesday, Wednesday & Friday, 5:00pm - 7:00pm
+      3. Weekend - not available yet
+   5. If a slot is already taken, show who is using it and cannot be picked
+   6. Pick an open slot and confirm
+      1. Show message: "Booking pending - bring your ID card to the counter.
+         Item will not be given to you until then."
+   7. Note: booking one slot still leaves the other slot open for booking
+
+8. My Bookings (booking history)
+   1. See list of own bookings
+   2. Filter by: Pending / Active / Completed / Cancelled
+   3. Can cancel a booking only while it is still "Pending"
+
+9. Step Tracker
+   1. Choose Walk, Jog, or Run
+   2. Tap "Start"
+      1. Steps, distance, and calories go up while tracking
+   3. Tap "Stop"
+      1. Today's total is updated
+   4. See this week's chart (steps per day)
+   5. See daily step goal progress bar
+
+10. BMI & Diet Guide
+    1. Enter height and weight
+    2. See BMI number and category (Underweight / Normal / Overweight / Obese)
+    3. See tips for: Exercise, Meals, Water intake, Daily calories
+       (these tips are written by admin and can change over time)
+
+11. Exercise Guide
+    1. Filter by Stretching or Strength Training
+    2. Tap a tutorial card
+       1. Opens the video on YouTube
+
+12. Chat & Rewards
+    1. Chat
+       1. Type a question, or tap a suggested question
+       2. See the answer appear
+    2. Announcements
+       1. See list of sports events and notices
+    3. Journal
+       1. Choose today's mood
+       2. Write a short note
+       3. Save entry -> added to journal list
+    4. Rewards
+       1. See points and login streak
+       2. Tap "Claim daily reward" (once per day)
+       3. See badges earned and locked
+
+------------------------------------------------
+ADMIN SIDE (staff who manage the system)
+------------------------------------------------
+
+13. Admin Dashboard
+    1. See today's numbers: bookings today, equipment in use,
+       registered users, pending ID checks
+    2. See list of users waiting for ID verification
+       1. Tap "Approve" or "Reject"
+    3. See list of today's bookings
+
+14. Manage Equipment (admin)
+    1. See list of all equipment
+    2. Tap "Add equipment"
+       1. Enter name, choose an icon, tick "listed for booking"
+    3. Tap "Edit" on an item -> change name / icon / listed
+    4. Tap "Delete" on an item -> removed (can undo for a few seconds)
+
+15. Manage Bookings (admin)
+    1. See list of every booking from all students and staff
+    2. Search by name, ID, or equipment; filter by status
+    3. If booking is "Pending":
+       1. Tap "Approve" - means: ID card has been collected,
+          item is now given to the borrower -> becomes "Active"
+       2. OR tap "Cancel" - means: card was not brought -> becomes "Cancelled"
+    4. If booking is "Active" (item currently with borrower):
+       1. Tap "Complete" - means: item has been returned,
+          ID card is given back to borrower -> becomes "Completed"
+
+16. Manage Users (admin)
+    1. See list of all students and staff
+    2. Filter by Student / Staff / Pending; search by name or ID
+    3. Tap "View" on a user
+       1. See full details: contact info, gender, height, weight, BMI,
+          and the uploaded ID card photo
+       2. If still pending, tap "Approve" or "Reject"
+
+17. Manage Content (admin)
+    1. BMI & Diet posts
+       1. Choose a BMI category (Underweight / Normal / Overweight / Obese)
+       2. Edit the text for Exercise / Meals / Water / Calories
+       3. Tap "Save"
+    2. Exercise tutorials
+       1. Tap "Add tutorial" -> enter title, category, duration, level, description
+       2. OR tap "Edit" / "Delete" on an existing tutorial

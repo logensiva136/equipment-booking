@@ -1,12 +1,17 @@
 import { useState } from 'react'
 import AdminShell from '../../components/AdminShell.jsx'
-import { fontDisplay, fontMono, tealCheckVars } from '../../theme.js'
+import { fontDisplay, fontMono, orangeBtnVars, tealCheckVars } from '../../theme.js'
 
-// Mock data -- real data via GET /api/admin/bookings.
+// Mock data -- real data via GET /api/admin/bookings. Lifecycle:
+//   pending   -- booked on the system, ID card not yet at the counter
+//   active    -- admin collected the card and released the item
+//   completed -- item returned, admin released the booking and gave
+//                the card back
+//   cancelled -- never collected / cancelled before release
 const INITIAL_BOOKINGS = [
-  { id: 'bk-1', equipment: 'Badminton Racket', borrower: { name: 'Ahmad Faiz', id: '21DTK21F1002', role: 'Student' }, slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '18 Jul 2026', status: 'upcoming' },
-  { id: 'bk-2', equipment: 'Volleyball', borrower: { name: 'Nur Aisyah', id: 'STF-0031', role: 'Staff' }, slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '18 Jul 2026', status: 'upcoming' },
-  { id: 'bk-3', equipment: 'Football', borrower: { name: 'Haziq Rahman', id: '21DEE22F0456', role: 'Student' }, slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '20 Jul 2026', status: 'upcoming' },
+  { id: 'bk-1', equipment: 'Badminton Racket', borrower: { name: 'Ahmad Faiz', id: '21DTK21F1002', role: 'Student' }, slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '18 Jul 2026', status: 'pending' },
+  { id: 'bk-2', equipment: 'Volleyball', borrower: { name: 'Nur Aisyah', id: 'STF-0031', role: 'Staff' }, slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '18 Jul 2026', status: 'active' },
+  { id: 'bk-3', equipment: 'Football', borrower: { name: 'Haziq Rahman', id: '21DEE22F0456', role: 'Student' }, slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '20 Jul 2026', status: 'pending' },
   { id: 'bk-4', equipment: 'Table Tennis Paddle', borrower: { name: 'Farah Idris', id: 'STF-0118', role: 'Staff' }, slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '11 Jul 2026', status: 'completed' },
   { id: 'bk-5', equipment: 'Basketball', borrower: { name: 'Ahmad Faiz', id: '21DTK21F1002', role: 'Student' }, slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '9 Jul 2026', status: 'completed' },
   { id: 'bk-6', equipment: 'Frisbee', borrower: { name: 'Nur Aisyah', id: 'STF-0031', role: 'Staff' }, slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '29 Jun 2026', status: 'cancelled' },
@@ -14,23 +19,36 @@ const INITIAL_BOOKINGS = [
 
 const FILTERS = [
   { key: 'all', label: 'All' },
-  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'active', label: 'Active' },
   { key: 'completed', label: 'Completed' },
   { key: 'cancelled', label: 'Cancelled' },
 ]
 
+const STATUS_HELP = {
+  pending: 'Awaiting ID card at the counter',
+  active: 'Card held at the counter until return',
+}
+
 function StatusBadge({ status }) {
+  if (status === 'pending') {
+    return (
+      <span className="badge rounded-pill" style={{ backgroundColor: 'var(--tw-sky-100)', color: 'var(--tw-sky-700)' }}>
+        Pending
+      </span>
+    )
+  }
+  if (status === 'active') {
+    return (
+      <span className="badge rounded-pill" style={{ backgroundColor: 'var(--tw-teal-700)', color: '#fff' }}>
+        Active
+      </span>
+    )
+  }
   if (status === 'completed') {
     return <span className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">Completed</span>
   }
-  if (status === 'cancelled') {
-    return <span className="badge rounded-pill bg-danger-subtle text-danger-emphasis">Cancelled</span>
-  }
-  return (
-    <span className="badge rounded-pill" style={{ backgroundColor: 'var(--tw-teal-700)', color: '#fff' }}>
-      Upcoming
-    </span>
-  )
+  return <span className="badge rounded-pill bg-danger-subtle text-danger-emphasis">Cancelled</span>
 }
 
 export default function AdminBookings() {
@@ -49,9 +67,23 @@ export default function AdminBookings() {
     return matchesFilter && matchesQuery
   })
 
-  const cancelBooking = (id) => {
+  // Card collected, item released to the borrower.
+  const approve = (id) => {
+    // TODO: PATCH /api/admin/bookings/:id { status: 'active' }
+    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'active' } : b)))
+  }
+
+  // Card was never surrendered, or the booking is being called off
+  // before release.
+  const cancel = (id) => {
     // TODO: PATCH /api/admin/bookings/:id { status: 'cancelled' }
     setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' } : b)))
+  }
+
+  // Item returned, card handed back to the borrower.
+  const complete = (id) => {
+    // TODO: PATCH /api/admin/bookings/:id { status: 'completed' }
+    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'completed' } : b)))
   }
 
   return (
@@ -66,8 +98,9 @@ export default function AdminBookings() {
         <h1 className="fw-semibold mb-2" style={{ ...fontDisplay, fontSize: 'clamp(2rem, 4vw, 2.8rem)' }}>
           Manage bookings
         </h1>
-        <p className="text-body-secondary mb-4" style={{ maxWidth: '48ch' }}>
-          Every booking across all students and staff.
+        <p className="text-body-secondary mb-4" style={{ maxWidth: '52ch' }}>
+          Approve a booking once the borrower's ID card is at the counter, and mark it complete once the item and the
+          card are both back.
         </p>
 
         <div className="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
@@ -126,7 +159,7 @@ export default function AdminBookings() {
                     Status
                   </th>
                   <th className="small text-uppercase text-body-secondary fw-semibold text-end" style={fontMono}>
-                    &nbsp;
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -147,13 +180,35 @@ export default function AdminBookings() {
                     <td>{b.date}</td>
                     <td>
                       <StatusBadge status={b.status} />
+                      {STATUS_HELP[b.status] && (
+                        <span className="d-block small text-body-secondary mt-1" style={{ maxWidth: '14rem' }}>
+                          {STATUS_HELP[b.status]}
+                        </span>
+                      )}
                     </td>
                     <td className="text-end">
-                      {b.status === 'upcoming' && (
-                        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => cancelBooking(b.id)}>
-                          Cancel
-                        </button>
-                      )}
+                      <div className="d-inline-flex gap-2">
+                        {b.status === 'pending' && (
+                          <>
+                            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => cancel(b.id)}>
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm text-white"
+                              style={{ backgroundColor: 'var(--tw-teal-700)', borderColor: 'var(--tw-teal-700)' }}
+                              onClick={() => approve(b.id)}
+                            >
+                              Approve (card collected)
+                            </button>
+                          </>
+                        )}
+                        {b.status === 'active' && (
+                          <button type="button" className="btn rounded-2 fw-semibold btn-sm" style={orangeBtnVars} onClick={() => complete(b.id)}>
+                            Complete (item &amp; card returned)
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
