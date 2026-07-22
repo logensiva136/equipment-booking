@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AppHeader from '../../components/AppHeader.jsx'
+import { apiJson } from '../../api.js'
+import { useSiteConfig } from '../../siteConfig.jsx'
 import { fontDisplay, fontMono, orangeBtnVars, tealCheckVars } from '../../theme.js'
 
 const SECTIONS = [
@@ -20,30 +22,8 @@ const CHAT_SUGGESTIONS = [
   'How do I improve my running pace?',
 ]
 
-// Simple keyword-matched canned replies for the prototype. Swap for a
-// real call to the Django Ninja backend once it proxies to an LLM,
-// e.g. POST /api/chat { message }.
-function craftReply(message) {
-  const m = message.toLowerCase()
-  if (m.includes('water')) {
-    return 'Most adults do well with about 2\u20132.5L a day, more on days you train. Spreading it through the day works better than chugging it all at once.'
-  }
-  if (m.includes('stretch')) {
-    return "Try this: neck rolls (30s), shoulder circles (30s), standing quad stretch (30s each side), forward fold (30s), and calf stretch against a wall (30s each side). You'll find the full routine under the Exercise Guide too."
-  }
-  if (m.includes('bmi')) {
-    return 'A BMI between 18.5 and 24.9 is generally considered the normal range. You can calculate yours on the BMI & Diet Guide page \u2014 it\u2019ll also show tailored exercise and meal guidance.'
-  }
-  if (m.includes('pace') || m.includes('run')) {
-    return 'To improve pace, mix in interval sessions (short fast bursts with recovery jogs) once or twice a week, alongside your regular easy runs. Track it on the Step Tracker to see your trend.'
-  }
-  if (m.includes('sleep')) {
-    return 'Aim for 7\u20139 hours. Recovery (including sleep) matters as much as training for actually getting fitter.'
-  }
-  return "Good question! I'm a simple demo assistant for now \u2014 once connected to the real backend I'll be able to give more tailored answers based on your profile and activity."
-}
-
 function ChatSection() {
+  const { siteName } = useSiteConfig()
   const [messages, setMessages] = useState([
     { id: 'm0', from: 'assistant', text: 'Hi! Ask me anything about health, fitness or sports on campus.' },
   ])
@@ -55,18 +35,21 @@ function ChatSection() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages, typing])
 
-  const send = (text) => {
+  const send = async (text) => {
     const trimmed = text.trim()
     if (!trimmed) return
     const userMsg = { id: `u-${Date.now()}`, from: 'user', text: trimmed }
     setMessages((prev) => [...prev, userMsg])
     setInput('')
     setTyping(true)
-    // TODO: replace with a real request to the backend's chat endpoint.
-    setTimeout(() => {
-      setMessages((prev) => [...prev, { id: `a-${Date.now()}`, from: 'assistant', text: craftReply(trimmed) }])
+    try {
+      const { reply } = await apiJson('/chat', { method: 'POST', json: { message: trimmed } })
+      setMessages((prev) => [...prev, { id: `a-${Date.now()}`, from: 'assistant', text: reply }])
+    } catch {
+      setMessages((prev) => [...prev, { id: `a-${Date.now()}`, from: 'assistant', text: 'Sorry, I could not reach the server just now.' }])
+    } finally {
       setTyping(false)
-    }, 700)
+    }
   }
 
   const handleSubmit = (e) => {
@@ -102,7 +85,7 @@ function ChatSection() {
             >
               {msg.from === 'assistant' && (
                 <span className="d-block small fw-semibold mb-1" style={{ ...fontMono, color: 'var(--tw-teal-700)' }}>
-                  FITPOLY ASSISTANT
+                  {siteName.toUpperCase()} ASSISTANT
                 </span>
               )}
               <span className="small">{msg.text}</span>
@@ -112,7 +95,7 @@ function ChatSection() {
         {typing && (
           <div className="d-flex justify-content-start">
             <div className="rounded-3 px-3 py-2 small text-body-secondary" style={{ backgroundColor: '#fff', border: '1px solid var(--tw-neutral-200)' }}>
-              FitPoly Assistant is typing&hellip;
+              {siteName} Assistant is typing&hellip;
             </div>
           </div>
         )}
@@ -185,32 +168,34 @@ const MOODS = [
   { key: 'tired', emoji: '\ud83d\ude2b', label: 'Tired' },
 ]
 
-const INITIAL_ENTRIES = [
-  { id: 'j1', date: '16 Jul 2026', mood: 'good', text: 'Booked the futsal court after class. Legs a bit sore but felt good to move.' },
-  { id: 'j2', date: '14 Jul 2026', mood: 'great', text: 'Hit my step goal for the third day in a row. Feeling more energetic overall.' },
-]
-
 function JournalSection() {
-  const [entries, setEntries] = useState(INITIAL_ENTRIES)
+  const [entries, setEntries] = useState([])
   const [draft, setDraft] = useState('')
   const [mood, setMood] = useState('good')
+  const [error, setError] = useState('')
 
-  const saveEntry = (e) => {
+  useEffect(() => {
+    apiJson('/journal/mine')
+      .then(setEntries)
+      .catch(() => setError('Could not load your journal.'))
+  }, [])
+
+  const saveEntry = async (e) => {
     e.preventDefault()
     if (!draft.trim()) return
-    // TODO: POST /api/journal { mood, text }
-    const entry = {
-      id: `j-${Date.now()}`,
-      date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-      mood,
-      text: draft.trim(),
+    try {
+      const entry = await apiJson('/journal', { method: 'POST', json: { mood, text: draft.trim() } })
+      setEntries((prev) => [entry, ...prev])
+      setDraft('')
+    } catch {
+      setError('Could not save that entry.')
     }
-    setEntries((prev) => [entry, ...prev])
-    setDraft('')
   }
 
   return (
     <div style={{ maxWidth: '40rem' }}>
+      {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
       <form onSubmit={saveEntry} className="card mb-4">
         <div className="card-body">
           <label className="form-label small fw-semibold d-block">How are you feeling today?</label>
@@ -274,28 +259,45 @@ function JournalSection() {
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const TODAY_INDEX = 3 // Thursday
 
-const BADGES = [
-  { key: 'first-booking', label: 'First Booking', earned: true },
-  { key: '7-day-streak', label: '7-Day Streak', earned: true },
-  { key: 'step-goal-5x', label: 'Step Goal x5', earned: false },
-  { key: 'journal-keeper', label: 'Journal Keeper', earned: false },
+const BADGE_LABELS = [
+  { key: 'first-booking', label: 'First Booking' },
+  { key: '7-day-streak', label: '7-Day Streak' },
+  { key: 'step-goal-5x', label: 'Step Goal x5' },
+  { key: 'journal-keeper', label: 'Journal Keeper' },
 ]
 
 function RewardsSection() {
-  const [points, setPoints] = useState(320)
-  const [streak, setStreak] = useState(3)
+  const [points, setPoints] = useState(0)
+  const [streak, setStreak] = useState(0)
   const [claimedToday, setClaimedToday] = useState(false)
+  const [badges, setBadges] = useState({})
+  const [error, setError] = useState('')
 
-  const claim = () => {
+  const applyRewards = (data) => {
+    setPoints(data.points)
+    setStreak(data.streak)
+    setClaimedToday(data.claimedToday)
+    setBadges(data.badges)
+  }
+
+  useEffect(() => {
+    apiJson('/rewards/mine').then(applyRewards).catch(() => setError('Could not load rewards.'))
+  }, [])
+
+  const claim = async () => {
     if (claimedToday) return
-    // TODO: POST /api/rewards/daily-claim
-    setPoints((p) => p + 10)
-    setStreak((s) => s + 1)
-    setClaimedToday(true)
+    try {
+      const data = await apiJson('/rewards/daily-claim', { method: 'POST' })
+      applyRewards(data)
+    } catch {
+      setError('Could not claim today’s reward.')
+    }
   }
 
   return (
     <div style={{ maxWidth: '40rem' }}>
+      {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
       <div className="row row-cols-2 g-3 mb-4">
         <div className="col">
           <div className="rounded-3 p-3 h-100" style={{ backgroundColor: 'var(--tw-neutral-900)' }}>
@@ -356,11 +358,11 @@ function RewardsSection() {
         Badges
       </span>
       <div className="row row-cols-2 row-cols-sm-4 g-3">
-        {BADGES.map((b) => (
+        {BADGE_LABELS.map((b) => (
           <div className="col" key={b.key}>
             <div
               className="card h-100 text-center"
-              style={!b.earned ? { opacity: 0.5, filter: 'grayscale(0.6)' } : undefined}
+              style={!badges[b.key] ? { opacity: 0.5, filter: 'grayscale(0.6)' } : undefined}
             >
               <div className="card-body py-3">
                 <div

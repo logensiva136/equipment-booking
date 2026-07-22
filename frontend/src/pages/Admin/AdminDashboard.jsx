@@ -1,38 +1,55 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AdminShell from '../../components/AdminShell.jsx'
+import { apiJson } from '../../api.js'
+import { useSiteConfig } from '../../siteConfig.jsx'
 import { fontDisplay, fontMono } from '../../theme.js'
 
-// Mock data -- real numbers come from the Django Ninja backend once
-// it exists (e.g. GET /api/admin/overview).
-const STATS = [
-  { label: 'BOOKINGS TODAY', value: '18', accent: 'var(--tw-orange-500)' },
-  { label: 'EQUIPMENT IN USE', value: '3 / 8', accent: 'var(--tw-teal-700)' },
-  { label: 'REGISTERED USERS', value: '642', accent: 'var(--tw-amber-500)' },
-  { label: 'PENDING VERIFICATIONS', value: '5', accent: 'var(--tw-sky-600)' },
-]
-
-// Ties back to the ID photo uploaded during registration -- an admin
-// needs to review that photo against the name/ID before approving.
-const PENDING_VERIFICATIONS = [
-  { id: 'v1', name: 'Nur Aisyah Rahman', role: 'Student', idLabel: 'Matrix No.', idNumber: '24DTK21F1102', submitted: '2 hours ago' },
-  { id: 'v2', name: 'Haziq Rahman', role: 'Student', idLabel: 'Matrix No.', idNumber: '21DEE22F0456', submitted: '5 hours ago' },
-  { id: 'v3', name: 'Farah Idris', role: 'Staff', idLabel: 'Staff ID', idNumber: 'STF-0118', submitted: 'Yesterday' },
-]
-
-const TODAY_BOOKINGS = [
-  { id: 'b1', equipment: 'Badminton Racket', borrower: 'Ahmad Faiz (21DTK21F1002)', slot: '5:00 PM \u2013 7:00 PM' },
-  { id: 'b2', equipment: 'Volleyball', borrower: 'Nur Aisyah (STF-0031)', slot: '5:00 PM \u2013 7:00 PM' },
-  { id: 'b3', equipment: 'Football', borrower: 'Haziq Rahman (21DEE22F0456)', slot: '5:00 PM \u2013 6:30 PM' },
-]
+function todayDisplayDate() {
+  const d = new Date()
+  return `${d.getDate()} ${d.toLocaleString('en-GB', { month: 'short' })} ${d.getFullYear()}`
+}
 
 export default function AdminDashboard() {
-  const [pending, setPending] = useState(PENDING_VERIFICATIONS)
+  const { siteName } = useSiteConfig()
+  const [equipment, setEquipment] = useState([])
+  const [bookings, setBookings] = useState([])
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const resolve = (id) => {
-    // TODO: POST /api/admin/verifications/:id/{approve,reject} on the
-    // Django Ninja backend.
-    setPending((prev) => prev.filter((p) => p.id !== id))
+  useEffect(() => {
+    Promise.all([apiJson('/admin/equipment'), apiJson('/admin/bookings'), apiJson('/admin/users')])
+      .then(([e, b, u]) => {
+        setEquipment(e)
+        setBookings(b)
+        setUsers(u)
+      })
+      .catch(() => setError('Could not load the dashboard.'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const resolve = async (id, verified) => {
+    try {
+      const updated = await apiJson(`/admin/users/${id}/${verified ? 'approve' : 'reject'}`, { method: 'POST' })
+      setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)))
+    } catch {
+      setError('Could not update that user.')
+    }
   }
+
+  if (loading) return <AdminShell><div className="p-3 p-lg-5" /></AdminShell>
+
+  const today = todayDisplayDate()
+  const bookingsToday = bookings.filter((b) => b.date === today)
+  const equipmentInUse = bookings.filter((b) => b.status === 'active').length
+  const pendingUsers = users.filter((u) => !u.verified)
+
+  const stats = [
+    { label: 'BOOKINGS TODAY', value: String(bookingsToday.length), accent: 'var(--tw-orange-500)' },
+    { label: 'EQUIPMENT IN USE', value: `${equipmentInUse} / ${equipment.length}`, accent: 'var(--tw-teal-700)' },
+    { label: 'REGISTERED USERS', value: String(users.length), accent: 'var(--tw-amber-500)' },
+    { label: 'PENDING VERIFICATIONS', value: String(pendingUsers.length), accent: 'var(--tw-sky-600)' },
+  ]
 
   return (
     <AdminShell>
@@ -47,12 +64,14 @@ export default function AdminDashboard() {
           Good afternoon
         </h1>
         <p className="text-body-secondary mb-4" style={{ maxWidth: '48ch' }}>
-          Here&rsquo;s what&rsquo;s happening across FitPoly today.
+          Here&rsquo;s what&rsquo;s happening across {siteName} today.
         </p>
+
+        {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
         {/* KPI cards */}
         <div className="row row-cols-2 row-cols-lg-4 g-3 mb-5">
-          {STATS.map((stat) => (
+          {stats.map((stat) => (
             <div className="col" key={stat.label}>
               <div className="card h-100" style={{ borderTop: `3px solid ${stat.accent}` }}>
                 <div className="card-body">
@@ -75,37 +94,37 @@ export default function AdminDashboard() {
               <span className="small fw-semibold text-uppercase" style={{ ...fontMono, letterSpacing: '0.1em' }}>
                 Pending ID verifications
               </span>
-              {pending.length > 0 && (
+              {pendingUsers.length > 0 && (
                 <span className="badge rounded-pill" style={{ backgroundColor: 'var(--tw-sky-100)', color: 'var(--tw-sky-700)' }}>
-                  {pending.length} waiting
+                  {pendingUsers.length} waiting
                 </span>
               )}
             </div>
 
-            {pending.length === 0 ? (
+            {pendingUsers.length === 0 ? (
               <div className="card">
                 <div className="card-body text-center text-body-secondary py-4">All caught up &mdash; nothing to review.</div>
               </div>
             ) : (
               <div className="d-flex flex-column gap-2">
-                {pending.map((p) => (
+                {pendingUsers.map((p) => (
                   <div key={p.id} className="card">
                     <div className="card-body d-flex align-items-center justify-content-between flex-wrap gap-2">
                       <div>
                         <span className="d-block fw-semibold">{p.name}</span>
                         <span className="d-block small text-body-secondary">
-                          {p.role} &middot; {p.idLabel} {p.idNumber} &middot; {p.submitted}
+                          {p.role} &middot; {p.idLabel} {p.idNumber} &middot; {p.registered}
                         </span>
                       </div>
                       <div className="d-flex gap-2">
-                        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => resolve(p.id)}>
+                        <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => resolve(p.id, false)}>
                           Reject
                         </button>
                         <button
                           type="button"
                           className="btn btn-sm text-white"
                           style={{ backgroundColor: 'var(--tw-teal-700)', borderColor: 'var(--tw-teal-700)' }}
-                          onClick={() => resolve(p.id)}
+                          onClick={() => resolve(p.id, true)}
                         >
                           Approve
                         </button>
@@ -123,15 +142,21 @@ export default function AdminDashboard() {
               Today&rsquo;s bookings
             </span>
             <div className="card">
-              <ul className="list-group list-group-flush">
-                {TODAY_BOOKINGS.map((b) => (
-                  <li key={b.id} className="list-group-item">
-                    <span className="d-block fw-semibold small">{b.equipment}</span>
-                    <span className="d-block small text-body-secondary">{b.borrower}</span>
-                    <span className="d-block small text-body-secondary">{b.slot}</span>
-                  </li>
-                ))}
-              </ul>
+              {bookingsToday.length === 0 ? (
+                <div className="card-body text-center text-body-secondary py-4">Nothing booked today yet.</div>
+              ) : (
+                <ul className="list-group list-group-flush">
+                  {bookingsToday.map((b) => (
+                    <li key={b.id} className="list-group-item">
+                      <span className="d-block fw-semibold small">{b.equipment}</span>
+                      <span className="d-block small text-body-secondary">
+                        {b.borrower.name} ({b.borrower.id})
+                      </span>
+                      <span className="d-block small text-body-secondary">{b.time}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </div>

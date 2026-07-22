@@ -6,6 +6,7 @@ import {
   BookingIllustration,
   RewardsIllustration,
 } from './illustrations.jsx'
+import { useSiteConfig } from '../../siteConfig.jsx'
 import { fontDisplay, fontMono, orangeBtnVars } from '../../theme.js'
 
 // Everything below is styled with Bootstrap utility classes (+ the
@@ -47,6 +48,7 @@ const SLIDES = [
 ]
 
 export default function Onboarding() {
+  const { siteName } = useSiteConfig()
   const [index, setIndex] = useState(0)
   const navigate = useNavigate()
   const isLast = index === SLIDES.length - 1
@@ -116,7 +118,7 @@ export default function Onboarding() {
       <div className="d-flex flex-column justify-content-between gap-4 p-4 p-lg-5 bg-white" style={{ flex: '1 1 50%' }}>
         <div className="d-flex align-items-center justify-content-between">
           <span className="fs-4" style={{ ...fontDisplay, letterSpacing: '0.06em' }}>
-            FitPoly
+            {siteName}
           </span>
           {!isLast && (
             <button

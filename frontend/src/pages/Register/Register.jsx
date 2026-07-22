@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { apiJson, ApiError } from '../../api.js'
+import { useSiteConfig } from '../../siteConfig.jsx'
 import { fontDisplay, fontMono, orangeBtnVars, tealCheckVars } from '../../theme.js'
 
 // Per user type, only the ID field's label/placeholder/help text
@@ -38,11 +40,13 @@ const initialForm = {
 
 export default function Register() {
   const navigate = useNavigate()
+  const { siteName } = useSiteConfig()
   const [userType, setUserType] = useState('student')
   const [form, setForm] = useState(initialForm)
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState({})
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [idPreviewUrl, setIdPreviewUrl] = useState(null)
   const fileInputRef = useRef(null)
 
@@ -108,17 +112,37 @@ export default function Register() {
     return next
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     const nextErrors = validate()
     setErrors(nextErrors)
-    if (Object.keys(nextErrors).length === 0) {
-      // TODO: POST to the Django Ninja backend, e.g. /api/register, as
-      // multipart/form-data (not JSON) since idFile is a real file —
-      // build a FormData with { userType, ...form } and append idFile
-      // separately. The backend treats idNumber as the username for
-      // both roles, and stores idFile for admin verification.
+    if (Object.keys(nextErrors).length > 0) return
+
+    setSubmitting(true)
+    try {
+      const body = new FormData()
+      body.append('userType', userType)
+      body.append('name', form.name)
+      body.append('idNumber', form.idNumber)
+      body.append('email', form.email)
+      body.append('phone', form.phone)
+      body.append('password', form.password)
+      body.append('gender', form.gender)
+      body.append('height', form.height)
+      body.append('weight', form.weight)
+      body.append('idFile', form.idFile)
+      await apiJson('/register', { method: 'POST', form: body })
       setSubmitted(true)
+    } catch (err) {
+      if (err instanceof ApiError && err.body?.errors) {
+        setErrors(err.body.errors)
+      } else if (err instanceof ApiError) {
+        setErrors({ idNumber: err.body?.detail || 'Something went wrong. Please try again.' })
+      } else {
+        setErrors({ idNumber: 'Could not reach the server. Please try again.' })
+      }
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -160,7 +184,7 @@ export default function Register() {
         }}
       >
         <span className="fs-4" style={{ ...fontDisplay, letterSpacing: '0.06em' }}>
-          FitPoly
+          {siteName}
         </span>
 
         <div>
@@ -189,7 +213,7 @@ export default function Register() {
         <div className="p-4 p-lg-5 mx-auto" style={{ maxWidth: '32rem' }}>
           <div className="d-lg-none mb-4">
             <span className="fs-4" style={{ ...fontDisplay, letterSpacing: '0.06em' }}>
-              FitPoly
+              {siteName}
             </span>
             <span
               className="small text-uppercase fw-semibold d-block mt-3"
@@ -200,7 +224,7 @@ export default function Register() {
           </div>
 
           <h2 className="fw-semibold mb-2" style={{ ...fontDisplay, fontSize: 'clamp(1.8rem, 3vw, 2.2rem)' }}>
-            Register for FitPoly
+            Register for {siteName}
           </h2>
           <p className="text-body-secondary mb-4">Tell us who you are, and we&rsquo;ll set up the right account.</p>
 
@@ -464,8 +488,8 @@ export default function Register() {
               </div>
             </div>
 
-            <button type="submit" className="btn w-100 rounded-2 fw-semibold py-2" style={orangeBtnVars}>
-              Create {config.label.toLowerCase()} account
+            <button type="submit" className="btn w-100 rounded-2 fw-semibold py-2" style={orangeBtnVars} disabled={submitting}>
+              {submitting ? 'Creating account…' : `Create ${config.label.toLowerCase()} account`}
             </button>
 
             <p className="text-center small text-body-secondary mt-3 mb-0">

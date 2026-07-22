@@ -1,21 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AppHeader from '../../components/AppHeader.jsx'
+import { apiJson, ApiError } from '../../api.js'
 import { fontDisplay, fontMono, tealCheckVars } from '../../theme.js'
-
-// Mock history -- real data comes from GET /api/bookings/mine once the
-// Django Ninja backend exists. Statuses follow the ID-card handover
-// process: a booking starts 'pending' until admin collects the card
-// and releases the item ('active'), then 'completed' once it's
-// returned and the card is handed back -- or 'cancelled' at any point
-// before that.
-const INITIAL_BOOKINGS = [
-  { id: 'bk-1', equipment: 'Badminton Racket', slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '18 Jul 2026', status: 'pending' },
-  { id: 'bk-2', equipment: 'Table Tennis Paddle', slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '20 Jul 2026', status: 'active' },
-  { id: 'bk-3', equipment: 'Basketball', slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '11 Jul 2026', status: 'completed' },
-  { id: 'bk-4', equipment: 'Jump Rope', slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '7 Jul 2026', status: 'completed' },
-  { id: 'bk-5', equipment: 'Futsal Ball', slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '2 Jul 2026', status: 'completed' },
-  { id: 'bk-6', equipment: 'Frisbee', slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '29 Jun 2026', status: 'cancelled' },
-]
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -52,17 +38,27 @@ function StatusBadge({ status }) {
 }
 
 export default function BookingHistory() {
-  const [bookings, setBookings] = useState(INITIAL_BOOKINGS)
+  const [bookings, setBookings] = useState([])
+  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    apiJson('/bookings/mine')
+      .then(setBookings)
+      .catch(() => setError('Could not load your bookings.'))
+      .finally(() => setLoading(false))
+  }, [])
 
   const filtered = filter === 'all' ? bookings : bookings.filter((b) => b.status === filter)
 
-  const cancelBooking = (id) => {
-    // TODO: PATCH /api/bookings/:id { status: 'cancelled' } on the
-    // Django Ninja backend. Only allowed while still pending -- once
-    // an admin has released the item, cancelling it isn't a
-    // self-service action any more.
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' } : b)))
+  const cancelBooking = async (id) => {
+    try {
+      const updated = await apiJson(`/bookings/${id}`, { method: 'PATCH', json: { status: 'cancelled' } })
+      setBookings((prev) => prev.map((b) => (b.id === id ? updated : b)))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.body?.detail || 'Could not cancel that booking.' : 'Could not reach the server.')
+    }
   }
 
   return (
@@ -103,7 +99,9 @@ export default function BookingHistory() {
           ))}
         </div>
 
-        {filtered.length === 0 ? (
+        {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
+        {loading ? null : filtered.length === 0 ? (
           <div className="text-center py-5 text-body-secondary">
             <p className="mb-1 fw-semibold">Nothing here yet</p>
             <p className="small mb-0">Bookings matching this filter will show up here.</p>

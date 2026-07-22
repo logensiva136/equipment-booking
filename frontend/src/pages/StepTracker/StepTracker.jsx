@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import AppHeader from '../../components/AppHeader.jsx'
+import { apiJson } from '../../api.js'
 import { fontDisplay, fontMono, orangeBtnVars, tealCheckVars } from '../../theme.js'
 
 const DAILY_GOAL = 10000
@@ -13,18 +14,8 @@ const MODES = {
   run: { label: 'Run', stepsPerMin: 180, strideM: 1.1, calPerStep: 0.07 },
 }
 
-// Mock week, with today's bar wired to live state so a tracked session
-// visibly moves the chart. Real data comes from GET /api/steps/weekly.
-const WEEK_TEMPLATE = [
-  { day: 'Mon', steps: 5200 },
-  { day: 'Tue', steps: 8100 },
-  { day: 'Wed', steps: 6400 },
-  { day: 'Thu', steps: null }, // today -- filled from live state
-  { day: 'Fri', steps: 7300 },
-  { day: 'Sat', steps: 4100 },
-  { day: 'Sun', steps: 6200 },
-]
-const TODAY_INDEX = 3
+// Mon=0 .. Sun=6, matching GET /api/steps/weekly's day order.
+const TODAY_INDEX = (new Date().getDay() + 6) % 7
 
 function formatClock(totalSeconds) {
   const m = Math.floor(totalSeconds / 60)
@@ -34,11 +25,23 @@ function formatClock(totalSeconds) {
 
 export default function StepTracker() {
   const [mode, setMode] = useState('walk')
-  const [todaySteps, setTodaySteps] = useState(6482)
+  const [todaySteps, setTodaySteps] = useState(0)
+  const [week, setWeek] = useState([])
   const [tracking, setTracking] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [sessionSteps, setSessionSteps] = useState(0)
   const intervalRef = useRef(null)
+
+  const loadWeek = () => {
+    return apiJson('/steps/weekly').then((data) => {
+      setWeek(data)
+      setTodaySteps(data[TODAY_INDEX]?.steps || 0)
+    })
+  }
+
+  useEffect(() => {
+    loadWeek().catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!tracking) return undefined
@@ -60,13 +63,19 @@ export default function StepTracker() {
     setTracking(true)
   }
 
-  const stopTracking = () => {
+  const stopTracking = async () => {
     setTracking(false)
-    // TODO: POST the finished session to the Django Ninja backend, e.g.
-    // /api/steps/sessions, with { mode, elapsedSeconds, steps }.
-    setTodaySteps((prev) => prev + Math.round(sessionSteps))
+    const steps = Math.round(sessionSteps)
     setSessionSteps(0)
     setElapsedSeconds(0)
+    try {
+      await apiJson('/steps/sessions', { method: 'POST', json: { mode, elapsedSeconds, steps } })
+      await loadWeek()
+    } catch {
+      // Keep the local tally moving even if the save failed, so the UI
+      // doesn't silently lose the session the user just did.
+      setTodaySteps((prev) => prev + steps)
+    }
   }
 
   const { strideM, calPerStep } = MODES[mode]
@@ -77,8 +86,8 @@ export default function StepTracker() {
 
   const goalPct = Math.min(100, Math.round((liveSteps / DAILY_GOAL) * 100))
 
-  const week = WEEK_TEMPLATE.map((d, i) => (i === TODAY_INDEX ? { ...d, steps: liveSteps } : d))
-  const maxSteps = Math.max(...week.map((d) => d.steps), 1)
+  const displayWeek = week.map((d, i) => (i === TODAY_INDEX ? { ...d, steps: liveSteps } : d))
+  const maxSteps = Math.max(...displayWeek.map((d) => d.steps || 0), 1)
 
   const stats = [
     { label: 'STEPS', value: liveSteps.toLocaleString(), unit: '' },
@@ -211,13 +220,13 @@ export default function StepTracker() {
             This week
           </span>
           <div className="d-flex align-items-end gap-2 gap-lg-3" style={{ height: '160px' }}>
-            {week.map((d, i) => (
+            {displayWeek.map((d, i) => (
               <div key={d.day} className="d-flex flex-column align-items-center flex-fill h-100 justify-content-end">
-                <span className="small text-body-secondary mb-1">{(d.steps / 1000).toFixed(1)}k</span>
+                <span className="small text-body-secondary mb-1">{d.steps == null ? '—' : `${(d.steps / 1000).toFixed(1)}k`}</span>
                 <div
                   className="w-100 rounded-top-2"
                   style={{
-                    height: `${Math.max(4, (d.steps / maxSteps) * 100)}%`,
+                    height: `${Math.max(4, ((d.steps || 0) / maxSteps) * 100)}%`,
                     backgroundColor: i === TODAY_INDEX ? 'var(--tw-orange-500)' : 'var(--tw-teal-200)',
                     transition: 'height .3s ease',
                   }}

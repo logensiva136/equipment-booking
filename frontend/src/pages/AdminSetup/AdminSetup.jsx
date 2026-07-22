@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { apiJson, ApiError } from '../../api.js'
 import { fontDisplay, fontMono, orangeBtnVars } from '../../theme.js'
 
 // Same "no custom stylesheet" approach as the onboarding carousel:
@@ -33,12 +33,12 @@ const initialForm = {
 }
 
 export default function AdminSetup() {
-  const navigate = useNavigate()
   const [form, setForm] = useState(initialForm)
   const [abbrTouched, setAbbrTouched] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState({})
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   const setField = (field) => (e) => {
     const value = e.target.value
@@ -75,15 +75,36 @@ export default function AdminSetup() {
     return next
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     const nextErrors = validate()
     setErrors(nextErrors)
-    if (Object.keys(nextErrors).length === 0) {
-      // TODO: POST to the Django Ninja backend, e.g. /api/setup/admin
-      // On success, the backend flips the "has an admin" flag so this
-      // page never shows again — subsequent visits go straight to /login.
+    if (Object.keys(nextErrors).length > 0) return
+
+    setSubmitting(true)
+    try {
+      const body = new FormData()
+      body.append('name', form.name)
+      body.append('username', form.username)
+      body.append('email', form.email)
+      body.append('password', form.password)
+      body.append('confirmPassword', form.confirmPassword)
+      body.append('companyName', form.companyName)
+      body.append('companyAbbr', form.companyAbbr)
+      await apiJson('/setup/admin', { method: 'POST', form: body })
       setSubmitted(true)
+    } catch (err) {
+      if (err instanceof ApiError && err.body?.errors) {
+        setErrors(err.body.errors)
+      } else if (err instanceof ApiError) {
+        // e.g. 409 -- an admin already exists (shouldn't normally happen,
+        // the app gate keeps this page unreachable once setup is done).
+        setErrors({ form: err.body?.detail || 'Something went wrong. Please try again.' })
+      } else {
+        setErrors({ form: 'Could not reach the server. Please try again.' })
+      }
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -106,7 +127,19 @@ export default function AdminSetup() {
             {form.companyAbbr}&rsquo;s admin account for <strong>{form.name}</strong> is ready. You can sign in with
             username <strong>{form.username}</strong>.
           </p>
-          <button type="button" className="btn rounded-2 fw-semibold px-4 mt-2" style={orangeBtnVars} onClick={() => navigate('/admin/login')}>
+          <button
+            type="button"
+            className="btn rounded-2 fw-semibold px-4 mt-2"
+            style={orangeBtnVars}
+            onClick={() => {
+              // Full reload (not client-side navigate) so the app-wide
+              // setup gate re-checks /api/setup/status and picks up the
+              // org name/abbreviation just created, instead of running
+              // with its stale pre-setup snapshot for the rest of the
+              // session.
+              window.location.assign('/admin/login')
+            }}
+          >
             Go to login
           </button>
         </div>
@@ -334,8 +367,10 @@ export default function AdminSetup() {
               </div>
             </div>
 
-            <button type="submit" className="btn w-100 rounded-2 fw-semibold py-2" style={orangeBtnVars}>
-              Complete setup
+            {errors.form && <div className="alert alert-danger py-2 small">{errors.form}</div>}
+
+            <button type="submit" className="btn w-100 rounded-2 fw-semibold py-2" style={orangeBtnVars} disabled={submitting}>
+              {submitting ? 'Setting up…' : 'Complete setup'}
             </button>
           </form>
         </div>

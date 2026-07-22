@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { apiJson } from '../../api.js'
+import { useSiteConfig } from '../../siteConfig.jsx'
 import { fontDisplay, fontMono, orangeBtnVars } from '../../theme.js'
 
 const RESEND_COOLDOWN = 30 // seconds
 
 export default function ForgotPassword() {
   const navigate = useNavigate()
+  const { siteName } = useSiteConfig()
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
   const [cooldown, setCooldown] = useState(0)
+  const [sending, setSending] = useState(false)
 
   useEffect(() => {
     if (cooldown <= 0) return undefined
@@ -17,7 +21,7 @@ export default function ForgotPassword() {
     return () => clearInterval(timer)
   }, [cooldown])
 
-  const sendResetLink = () => {
+  const sendResetLink = async () => {
     if (!email.trim()) {
       setError('Enter your email address.')
       return
@@ -27,9 +31,18 @@ export default function ForgotPassword() {
       return
     }
     setError('')
-    // TODO: POST to the Django Ninja backend, e.g. /api/password-reset,
-    // with { email }. Respond the same way whether or not the address
-    // is on file, so the form can't be used to check who's registered.
+    setSending(true)
+    try {
+      // The backend always replies the same way whether or not the
+      // address is on file, so there's nothing to branch on here.
+      await apiJson('/password-reset', { method: 'POST', json: { email } })
+    } catch {
+      // Fall through -- still show the generic "check your email" screen
+      // rather than leaking whether the request itself failed vs. the
+      // address not existing.
+    } finally {
+      setSending(false)
+    }
     setSent(true)
     setCooldown(RESEND_COOLDOWN)
   }
@@ -69,7 +82,7 @@ export default function ForgotPassword() {
             type="button"
             className="btn btn-outline-dark rounded-2 fw-semibold px-4 mt-2 mb-3"
             onClick={sendResetLink}
-            disabled={cooldown > 0}
+            disabled={cooldown > 0 || sending}
           >
             {cooldown > 0 ? `Resend email (${cooldown}s)` : 'Resend email'}
           </button>
@@ -95,7 +108,7 @@ export default function ForgotPassword() {
         }}
       >
         <span className="fs-4" style={{ ...fontDisplay, letterSpacing: '0.06em' }}>
-          FitPoly
+          {siteName}
         </span>
 
         <div>
@@ -124,7 +137,7 @@ export default function ForgotPassword() {
         <div className="p-4 p-lg-5 mx-auto w-100" style={{ maxWidth: '28rem' }}>
           <div className="d-lg-none mb-4">
             <span className="fs-4" style={{ ...fontDisplay, letterSpacing: '0.06em' }}>
-              FitPoly
+              {siteName}
             </span>
             <span
               className="small text-uppercase fw-semibold d-block mt-3"
@@ -160,8 +173,8 @@ export default function ForgotPassword() {
               {error && <div className="invalid-feedback">{error}</div>}
             </div>
 
-            <button type="submit" className="btn w-100 rounded-2 fw-semibold py-2" style={orangeBtnVars}>
-              Send reset link
+            <button type="submit" className="btn w-100 rounded-2 fw-semibold py-2" style={orangeBtnVars} disabled={sending}>
+              {sending ? 'Sending…' : 'Send reset link'}
             </button>
 
             <p className="text-center small text-body-secondary mt-3 mb-0">

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../auth.jsx'
+import { useSiteConfig } from '../siteConfig.jsx'
 import { fontDisplay, fontMono } from '../theme.js'
 
 const NAV_ITEMS = [
@@ -21,13 +23,20 @@ function navLinkStyle(isActive) {
 export default function AppHeader() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { logout } = useAuth()
+  const { siteName } = useSiteConfig()
   const [menuOpen, setMenuOpen] = useState(false)
+
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login')
+  }
 
   return (
     <header className="border-bottom bg-white">
       <div className="d-flex align-items-center justify-content-between p-3 p-lg-4">
         <Link to="/equipment" className="text-decoration-none text-dark fs-4" style={{ ...fontDisplay, letterSpacing: '0.06em' }}>
-          FitPoly
+          {siteName}
         </Link>
 
         <nav className="d-none d-lg-flex align-items-center gap-4">
@@ -46,7 +55,7 @@ export default function AppHeader() {
         <button
           type="button"
           className="btn btn-outline-dark btn-sm rounded-2 d-none d-lg-inline-block"
-          onClick={() => navigate('/login')}
+          onClick={handleLogout}
         >
           Log out
         </button>

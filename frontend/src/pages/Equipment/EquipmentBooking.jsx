@@ -2,49 +2,32 @@ import { useEffect, useState } from 'react'
 import { fontDisplay, fontMono, orangeBtnVars } from '../../theme.js'
 import { RacketIcon, BallIcon, PaddleIcon, RopeIcon, FrisbeeIcon } from './equipmentIcons.jsx'
 import AppHeader from '../../components/AppHeader.jsx'
+import { apiJson, ApiError } from '../../api.js'
+import { useAuth } from '../../auth.jsx'
 
 // Matches the Sports Affair collaboration's fixed slots from the brief.
 // Weekends aren't wired up on their end yet. Each equipment item has
 // its own booking per slot, so booking Mon & Thu for an item leaves
 // Tue/Wed/Fri still bookable for someone else (or you).
 const SLOTS = [
-  { id: 'mon-thu', label: 'Monday & Thursday', time: '5:00 PM \u2013 6:30 PM', bookable: true },
-  { id: 'tue-wed-fri', label: 'Tuesday, Wednesday & Friday', time: '5:00 PM \u2013 7:00 PM', bookable: true },
+  { id: 'mon-thu', label: 'Monday & Thursday', time: '5:00 PM – 6:30 PM', bookable: true },
+  { id: 'tue-wed-fri', label: 'Tuesday, Wednesday & Friday', time: '5:00 PM – 7:00 PM', bookable: true },
   { id: 'weekend', label: 'Saturday & Sunday', time: 'Not ready yet', bookable: false },
 ]
 const BOOKABLE_SLOT_IDS = SLOTS.filter((s) => s.bookable).map((s) => s.id)
 
-// Mock catalogue -- the real list comes from the Django Ninja backend
-// (e.g. GET /api/equipment).
-const EQUIPMENT = [
-  { id: 'badminton-racket', name: 'Badminton Racket', Icon: RacketIcon },
-  { id: 'basketball', name: 'Basketball', Icon: () => <BallIcon color="var(--tw-orange-600)" /> },
-  { id: 'futsal-ball', name: 'Futsal Ball', Icon: () => <BallIcon color="var(--tw-teal-700)" /> },
-  { id: 'table-tennis-paddle', name: 'Table Tennis Paddle', Icon: PaddleIcon },
-  { id: 'jump-rope', name: 'Jump Rope', Icon: RopeIcon },
-  { id: 'football', name: 'Football', Icon: () => <BallIcon color="var(--tw-neutral-900)" /> },
-  { id: 'volleyball', name: 'Volleyball', Icon: () => <BallIcon color="var(--tw-amber-500)" /> },
-  { id: 'frisbee', name: 'Frisbee', Icon: FrisbeeIcon },
-]
-
-// A booking occupies one equipment+slot until it's completed or
-// cancelled. Two statuses matter here:
-//  - 'pending':  booked on the system, but the borrower hasn't handed
-//                their ID card to the Sports Affair counter yet, so
-//                the item hasn't been released.
-//  - 'active':   admin has collected the card and released the item;
-//                it's genuinely in the borrower's hands until they
-//                return it and admin marks it completed (see Manage
-//                Bookings on the admin side for that half of the flow).
-// Mock seed data -- real data via GET /api/bookings.
-const INITIAL_BOOKINGS = [
-  { id: 'sb1', equipmentId: 'football', slotId: 'mon-thu', borrower: { name: 'Ahmad Faiz', id: '21DTK21F1002' }, status: 'active' },
-  { id: 'sb2', equipmentId: 'volleyball', slotId: 'tue-wed-fri', borrower: { name: 'Nur Aisyah', id: 'STF-0031' }, status: 'active' },
-  { id: 'sb3', equipmentId: 'frisbee', slotId: 'mon-thu', borrower: { name: 'Haziq Rahman', id: '21DEE22F0456' }, status: 'pending' },
-]
-
-// Stand-in for the logged-in user until real auth exists.
-const CURRENT_USER = { name: 'You', id: 'your ID on file' }
+// Maps the backend's iconKey (see equipment/models.py's Equipment.IconKey)
+// to the actual icon component rendered on each card.
+const ICON_BY_KEY = {
+  racket: RacketIcon,
+  'ball-orange': () => <BallIcon color="var(--tw-orange-600)" />,
+  'ball-teal': () => <BallIcon color="var(--tw-teal-700)" />,
+  'ball-dark': () => <BallIcon color="var(--tw-neutral-900)" />,
+  'ball-amber': () => <BallIcon color="var(--tw-amber-500)" />,
+  paddle: PaddleIcon,
+  rope: RopeIcon,
+  frisbee: FrisbeeIcon,
+}
 
 const STATUS_META = {
   pending: { label: 'Pending', badgeBg: 'var(--tw-sky-100)', badgeColor: 'var(--tw-sky-700)' },
@@ -52,10 +35,28 @@ const STATUS_META = {
 }
 
 export default function EquipmentBooking() {
-  const [bookings, setBookings] = useState(INITIAL_BOOKINGS)
+  const { user } = useAuth()
+  const [equipment, setEquipment] = useState([])
+  const [availability, setAvailability] = useState([])
+  const [loading, setLoading] = useState(true)
   const [selectedEquipment, setSelectedEquipment] = useState(null)
   const [selectedSlotId, setSelectedSlotId] = useState(null)
   const [banner, setBanner] = useState(null)
+  const [confirming, setConfirming] = useState(false)
+  const [modalError, setModalError] = useState('')
+
+  const loadData = () => {
+    return Promise.all([apiJson('/equipment'), apiJson('/bookings/availability')]).then(
+      ([equipmentData, availabilityData]) => {
+        setEquipment(equipmentData)
+        setAvailability(availabilityData)
+      }
+    )
+  }
+
+  useEffect(() => {
+    loadData().finally(() => setLoading(false))
+  }, [])
 
   useEffect(() => {
     if (!banner) return undefined
@@ -64,9 +65,9 @@ export default function EquipmentBooking() {
   }, [banner])
 
   const bookingFor = (equipmentId, slotId) =>
-    bookings.find((b) => b.equipmentId === equipmentId && b.slotId === slotId && b.status !== 'completed' && b.status !== 'cancelled')
+    availability.find((b) => b.equipmentId === equipmentId && b.slotId === slotId)
 
-  const equipmentWithAvailability = EQUIPMENT.map((item) => {
+  const equipmentWithAvailability = equipment.map((item) => {
     const occupiedSlots = BOOKABLE_SLOT_IDS.map((slotId) => bookingFor(item.id, slotId)).filter(Boolean)
     const fullyBooked = occupiedSlots.length === BOOKABLE_SLOT_IDS.length
     return { ...item, fullyBooked, occupiedCount: occupiedSlots.length }
@@ -82,6 +83,7 @@ export default function EquipmentBooking() {
 
   const openModal = (item) => {
     if (item.fullyBooked) return
+    setModalError('')
     setSelectedEquipment(item)
     setSelectedSlotId(null)
   }
@@ -91,22 +93,29 @@ export default function EquipmentBooking() {
     setSelectedSlotId(null)
   }
 
-  const confirmBooking = () => {
+  const confirmBooking = async () => {
     if (!selectedEquipment || !selectedSlotId) return
     const slot = SLOTS.find((s) => s.id === selectedSlotId)
-    // TODO: POST to the Django Ninja backend, e.g. /api/bookings, with
-    // { equipmentId: selectedEquipment.id, slotId }. The backend
-    // should create it with status 'pending' -- an admin approves it
-    // (see Manage Bookings) once the ID card is handed over in person.
-    setBookings((prev) => [
-      ...prev,
-      { id: `sb-${Date.now()}`, equipmentId: selectedEquipment.id, slotId: selectedSlotId, borrower: CURRENT_USER, status: 'pending' },
-    ])
-    setBanner(
-      `Booking pending: ${selectedEquipment.name} for ${slot.label}, ${slot.time}. Bring your Matrix / Staff card to the Sports Affair counter -- the item won't be released until admin has your card on file.`
-    )
-    closeModal()
+    setConfirming(true)
+    setModalError('')
+    try {
+      await apiJson('/bookings', {
+        method: 'POST',
+        json: { equipmentId: selectedEquipment.id, slotId: selectedSlotId },
+      })
+      await loadData()
+      setBanner(
+        `Booking pending: ${selectedEquipment.name} for ${slot.label}, ${slot.time}. Bring your Matrix / Staff card to the Sports Affair counter -- the item won't be released until admin has your card on file.`
+      )
+      closeModal()
+    } catch (err) {
+      setModalError(err instanceof ApiError ? err.body?.detail || 'Could not book that slot.' : 'Could not reach the server.')
+    } finally {
+      setConfirming(false)
+    }
   }
+
+  if (loading) return null
 
   return (
     <div className="min-vh-100 bg-white">
@@ -139,6 +148,7 @@ export default function EquipmentBooking() {
 
         <div className="row row-cols-2 row-cols-sm-3 row-cols-lg-4 g-3 g-lg-4">
           {sortedEquipment.map((item) => {
+            const Icon = ICON_BY_KEY[item.iconKey] || RacketIcon
             const slotLines = BOOKABLE_SLOT_IDS.map((slotId) => {
               const booking = bookingFor(item.id, slotId)
               if (!booking) return null
@@ -169,7 +179,7 @@ export default function EquipmentBooking() {
                     style={{ aspectRatio: '1 / 1', padding: '1.25rem' }}
                   >
                     <div style={{ width: '60%' }}>
-                      <item.Icon />
+                      <Icon />
                     </div>
                   </div>
                   <div className="card-body p-2 p-lg-3">
@@ -188,7 +198,7 @@ export default function EquipmentBooking() {
                     </div>
                     {slotLines.map(({ slot, booking, meta }) => (
                       <p key={slot.id} className="small text-body-secondary mb-0 mt-1">
-                        {slot.label.split(' ')[0]}: {booking.borrower.name} ({booking.borrower.id}) &middot; {meta.label}
+                        {slot.label.split(' ')[0]}: {booking.mine ? `You (${user?.name})` : 'Booked'} &middot; {meta.label}
                       </p>
                     ))}
                   </div>
@@ -245,7 +255,7 @@ export default function EquipmentBooking() {
                             <span className="d-block fw-semibold">{slot.label}</span>
                             <span className={`d-block small ${isSelected ? '' : 'text-body-secondary'}`}>
                               {slot.time}
-                              {existing && ` \u2014 ${existing.borrower.name} (${existing.borrower.id})`}
+                              {existing && ` — ${existing.mine ? 'You' : 'Booked'}`}
                             </span>
                           </span>
                           {!slot.bookable && <span className="badge bg-secondary-subtle text-secondary-emphasis">Coming soon</span>}
@@ -261,6 +271,7 @@ export default function EquipmentBooking() {
                       )
                     })}
                   </div>
+                  {modalError && <div className="alert alert-danger py-2 small mt-3 mb-0">{modalError}</div>}
                 </div>
                 <div className="modal-footer d-flex align-items-center justify-content-between">
                   <span className="small text-body-secondary">
@@ -274,10 +285,10 @@ export default function EquipmentBooking() {
                       type="button"
                       className="btn rounded-2 fw-semibold"
                       style={orangeBtnVars}
-                      disabled={!selectedSlotId}
+                      disabled={!selectedSlotId || confirming}
                       onClick={confirmBooking}
                     >
-                      Confirm booking
+                      {confirming ? 'Booking…' : 'Confirm booking'}
                     </button>
                   </div>
                 </div>

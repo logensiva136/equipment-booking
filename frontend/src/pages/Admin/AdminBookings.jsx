@@ -1,21 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AdminShell from '../../components/AdminShell.jsx'
+import { apiJson } from '../../api.js'
 import { fontDisplay, fontMono, orangeBtnVars, tealCheckVars } from '../../theme.js'
 
-// Mock data -- real data via GET /api/admin/bookings. Lifecycle:
+// Lifecycle:
 //   pending   -- booked on the system, ID card not yet at the counter
 //   active    -- admin collected the card and released the item
 //   completed -- item returned, admin released the booking and gave
 //                the card back
 //   cancelled -- never collected / cancelled before release
-const INITIAL_BOOKINGS = [
-  { id: 'bk-1', equipment: 'Badminton Racket', borrower: { name: 'Ahmad Faiz', id: '21DTK21F1002', role: 'Student' }, slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '18 Jul 2026', status: 'pending' },
-  { id: 'bk-2', equipment: 'Volleyball', borrower: { name: 'Nur Aisyah', id: 'STF-0031', role: 'Staff' }, slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '18 Jul 2026', status: 'active' },
-  { id: 'bk-3', equipment: 'Football', borrower: { name: 'Haziq Rahman', id: '21DEE22F0456', role: 'Student' }, slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '20 Jul 2026', status: 'pending' },
-  { id: 'bk-4', equipment: 'Table Tennis Paddle', borrower: { name: 'Farah Idris', id: 'STF-0118', role: 'Staff' }, slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '11 Jul 2026', status: 'completed' },
-  { id: 'bk-5', equipment: 'Basketball', borrower: { name: 'Ahmad Faiz', id: '21DTK21F1002', role: 'Student' }, slot: 'Tue, Wed & Fri', time: '5:00 PM \u2013 7:00 PM', date: '9 Jul 2026', status: 'completed' },
-  { id: 'bk-6', equipment: 'Frisbee', borrower: { name: 'Nur Aisyah', id: 'STF-0031', role: 'Staff' }, slot: 'Mon & Thu', time: '5:00 PM \u2013 6:30 PM', date: '29 Jun 2026', status: 'cancelled' },
-]
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -52,9 +45,18 @@ function StatusBadge({ status }) {
 }
 
 export default function AdminBookings() {
-  const [bookings, setBookings] = useState(INITIAL_BOOKINGS)
+  const [bookings, setBookings] = useState([])
+  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [query, setQuery] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    apiJson('/admin/bookings')
+      .then(setBookings)
+      .catch(() => setError('Could not load bookings.'))
+      .finally(() => setLoading(false))
+  }, [])
 
   const filtered = bookings.filter((b) => {
     const matchesFilter = filter === 'all' || b.status === filter
@@ -67,24 +69,23 @@ export default function AdminBookings() {
     return matchesFilter && matchesQuery
   })
 
+  const setStatus = async (id, status) => {
+    try {
+      const updated = await apiJson(`/admin/bookings/${id}`, { method: 'PATCH', json: { status } })
+      setBookings((prev) => prev.map((b) => (b.id === id ? updated : b)))
+    } catch {
+      setError('Could not update that booking.')
+    }
+  }
+
   // Card collected, item released to the borrower.
-  const approve = (id) => {
-    // TODO: PATCH /api/admin/bookings/:id { status: 'active' }
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'active' } : b)))
-  }
-
-  // Card was never surrendered, or the booking is being called off
-  // before release.
-  const cancel = (id) => {
-    // TODO: PATCH /api/admin/bookings/:id { status: 'cancelled' }
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' } : b)))
-  }
-
+  const approve = (id) => setStatus(id, 'active')
+  // Card was never surrendered, or the booking is being called off before release.
+  const cancel = (id) => setStatus(id, 'cancelled')
   // Item returned, card handed back to the borrower.
-  const complete = (id) => {
-    // TODO: PATCH /api/admin/bookings/:id { status: 'completed' }
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'completed' } : b)))
-  }
+  const complete = (id) => setStatus(id, 'completed')
+
+  if (loading) return <AdminShell><div className="p-3 p-lg-5" /></AdminShell>
 
   return (
     <AdminShell>
@@ -132,6 +133,8 @@ export default function AdminBookings() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+
+        {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
         {filtered.length === 0 ? (
           <div className="text-center py-5 text-body-secondary">

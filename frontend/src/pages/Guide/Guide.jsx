@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AppHeader from '../../components/AppHeader.jsx'
+import { apiJson } from '../../api.js'
 import { fontDisplay, fontMono, tealCheckVars } from '../../theme.js'
 
 const SECTIONS = [
@@ -25,45 +26,20 @@ function classifyBmi(bmi) {
   return BMI_CATEGORIES[3]
 }
 
-// Modelled as "posts" on purpose: an admin panel will eventually edit
-// this content per category, so the page reads it from data rather
-// than hardcoding it into the layout.
-const GUIDANCE_POSTS = {
-  underweight: [
-    { key: 'exercise', title: 'Exercise', body: 'Focus on strength training 3\u20134x a week to build muscle, alongside light cardio.' },
-    { key: 'meals', title: 'Meal recommendations', body: 'Add calorie-dense, nutrient-rich foods \u2014 nuts, whole milk, avocado \u2014 and an extra meal or snack a day.' },
-    { key: 'water', title: 'Water intake', body: 'Aim for about 2.5L a day, spaced through meals rather than all at once.' },
-    { key: 'calories', title: 'Daily calories', body: 'Target roughly 300\u2013500 kcal above your maintenance level to gain weight steadily.' },
-  ],
-  normal: [
-    { key: 'exercise', title: 'Exercise', body: 'Keep a balanced mix: 2\u20133 strength sessions and 2\u20133 cardio sessions a week.' },
-    { key: 'meals', title: 'Meal recommendations', body: 'Aim for a balanced plate \u2014 half vegetables, a quarter protein, a quarter whole grains.' },
-    { key: 'water', title: 'Water intake', body: 'Aim for about 2\u20132.5L a day, more on training days.' },
-    { key: 'calories', title: 'Daily calories', body: 'Eat around your maintenance level to stay at your current, healthy weight.' },
-  ],
-  overweight: [
-    { key: 'exercise', title: 'Exercise', body: 'Prioritise cardio 4\u20135x a week (brisk walking, jogging) plus 2 strength sessions.' },
-    { key: 'meals', title: 'Meal recommendations', body: 'Cut back on refined carbs and sugary drinks; fill half your plate with vegetables.' },
-    { key: 'water', title: 'Water intake', body: 'Aim for about 2.5\u20133L a day \u2014 a glass before meals can help with portion control.' },
-    { key: 'calories', title: 'Daily calories', body: 'Target a modest deficit of 300\u2013500 kcal below maintenance for gradual, sustainable loss.' },
-  ],
-  obese: [
-    { key: 'exercise', title: 'Exercise', body: 'Start with low-impact cardio (walking, swimming) 4\u20135x a week; add strength training gradually.' },
-    { key: 'meals', title: 'Meal recommendations', body: 'Work with whole foods and smaller portions, and cut back processed or fried food first.' },
-    { key: 'water', title: 'Water intake', body: 'Aim for about 3L a day, and swap sugary drinks for water where you can.' },
-    { key: 'calories', title: 'Daily calories', body: 'Aim for a steady deficit of 500\u2013750 kcal below maintenance \u2014 worth checking in with a doctor first.' },
-  ],
-}
-
 function BmiDietSection() {
   const [height, setHeight] = useState('')
   const [weight, setWeight] = useState('')
+  const [guidancePosts, setGuidancePosts] = useState({})
+
+  useEffect(() => {
+    apiJson('/content/bmi').then(setGuidancePosts).catch(() => {})
+  }, [])
 
   const h = Number(height)
   const w = Number(weight)
   const bmi = h > 0 && w > 0 ? w / (h / 100) ** 2 : null
   const category = bmi ? classifyBmi(bmi) : null
-  const posts = category ? GUIDANCE_POSTS[category.key] : null
+  const posts = category ? guidancePosts[category.key] : null
 
   return (
     <div>
@@ -188,64 +164,19 @@ const EXERCISE_FILTERS = [
   { key: 'strength', label: 'Strength Training' },
 ]
 
-const EXERCISES = [
-  {
-    id: 'ex-1',
-    title: '5-Minute Full Body Stretch',
-    category: 'stretching',
-    duration: '5 min',
-    level: 'Beginner',
-    description: 'A quick head-to-toe stretch routine to loosen up before or after activity.',
-  },
-  {
-    id: 'ex-2',
-    title: 'Dynamic Warm-Up Routine',
-    category: 'stretching',
-    duration: '8 min',
-    level: 'Beginner',
-    description: 'Mobility-focused movement to prep your joints before a workout.',
-  },
-  {
-    id: 'ex-3',
-    title: 'Post-Workout Cool Down',
-    category: 'stretching',
-    duration: '6 min',
-    level: 'Beginner',
-    description: 'Static stretches to bring your heart rate down and ease muscle soreness.',
-  },
-  {
-    id: 'ex-4',
-    title: 'Bodyweight Strength Circuit',
-    category: 'strength',
-    duration: '20 min',
-    level: 'Intermediate',
-    description: 'A no-equipment circuit covering push, pull and leg movements.',
-  },
-  {
-    id: 'ex-5',
-    title: 'Beginner Push-Up Progression',
-    category: 'strength',
-    duration: '10 min',
-    level: 'Beginner',
-    description: 'Step-by-step push-up variations to build up to a full rep.',
-  },
-  {
-    id: 'ex-6',
-    title: 'Core Stability Basics',
-    category: 'strength',
-    duration: '12 min',
-    level: 'Beginner',
-    description: 'Planks, dead bugs and bird dogs for a stronger core.',
-  },
-]
-
 function youtubeSearchUrl(title) {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${title} tutorial`)}`
 }
 
 function ExerciseGuideSection() {
   const [filter, setFilter] = useState('all')
-  const filtered = filter === 'all' ? EXERCISES : EXERCISES.filter((ex) => ex.category === filter)
+  const [exercises, setExercises] = useState([])
+
+  useEffect(() => {
+    apiJson('/content/exercises').then(setExercises).catch(() => {})
+  }, [])
+
+  const filtered = filter === 'all' ? exercises : exercises.filter((ex) => ex.category === filter)
 
   return (
     <div>

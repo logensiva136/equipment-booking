@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import AdminShell from '../../components/AdminShell.jsx'
+import { apiJson, ApiError } from '../../api.js'
 import { fontDisplay, fontMono, orangeBtnVars } from '../../theme.js'
 import { RacketIcon, BallIcon, PaddleIcon, RopeIcon, FrisbeeIcon } from '../Equipment/equipmentIcons.jsx'
 
@@ -24,32 +25,34 @@ function iconFor(key) {
 // booking lifecycle around the ID card handover, lives in Manage
 // Bookings instead -- keeping one source of truth for that state
 // rather than duplicating it here.
-// Mock catalogue -- real data via GET/POST/PATCH/DELETE /api/admin/equipment.
-const INITIAL_EQUIPMENT = [
-  { id: 'badminton-racket', name: 'Badminton Racket', iconKey: 'racket', listed: true },
-  { id: 'basketball', name: 'Basketball', iconKey: 'ball-orange', listed: true },
-  { id: 'futsal-ball', name: 'Futsal Ball', iconKey: 'ball-teal', listed: true },
-  { id: 'table-tennis-paddle', name: 'Table Tennis Paddle', iconKey: 'paddle', listed: true },
-  { id: 'jump-rope', name: 'Jump Rope', iconKey: 'rope', listed: true },
-  { id: 'football', name: 'Football', iconKey: 'ball-dark', listed: true },
-  { id: 'volleyball', name: 'Volleyball', iconKey: 'ball-amber', listed: true },
-  { id: 'frisbee', name: 'Frisbee', iconKey: 'frisbee', listed: true },
-]
 
 const emptyForm = { name: '', iconKey: ICON_OPTIONS[0].key, listed: true }
 
 export default function AdminEquipment() {
-  const [items, setItems] = useState(INITIAL_EQUIPMENT)
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(emptyForm)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
   const [undo, setUndo] = useState(null) // { item, index }
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    apiJson('/admin/equipment')
+      .then(setItems)
+      .catch(() => setError('Could not load the equipment catalogue.'))
+      .finally(() => setLoading(false))
+  }, [])
 
   useEffect(() => {
     if (!undo) return undefined
     const timer = setTimeout(() => setUndo(null), 6000)
     return () => clearTimeout(timer)
   }, [undo])
+
+  if (loading) return <AdminShell><div className="p-3 p-lg-5" /></AdminShell>
 
   const openAddModal = () => {
     setEditingId(null)
@@ -65,37 +68,56 @@ export default function AdminEquipment() {
 
   const closeModal = () => setModalOpen(false)
 
-  const saveItem = (e) => {
+  const saveItem = async (e) => {
     e.preventDefault()
     if (!form.name.trim()) return
-    // TODO: POST /api/admin/equipment (new) or PATCH /api/admin/equipment/:id (edit).
-    if (editingId) {
-      setItems((prev) =>
-        prev.map((it) => (it.id === editingId ? { ...it, name: form.name, iconKey: form.iconKey, listed: form.listed } : it))
-      )
-    } else {
-      const id = form.name.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-      setItems((prev) => [...prev, { id: id || `item-${Date.now()}`, name: form.name, iconKey: form.iconKey, listed: form.listed }])
+    setSaving(true)
+    setFormError('')
+    try {
+      if (editingId) {
+        const updated = await apiJson(`/admin/equipment/${editingId}`, { method: 'PATCH', json: form })
+        setItems((prev) => prev.map((it) => (it.id === editingId ? updated : it)))
+      } else {
+        const created = await apiJson('/admin/equipment', { method: 'POST', json: form })
+        setItems((prev) => [...prev, created])
+      }
+      setModalOpen(false)
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.body?.detail || 'Could not save this item.' : 'Could not reach the server.')
+    } finally {
+      setSaving(false)
     }
-    setModalOpen(false)
   }
 
-  const deleteItem = (id) => {
+  const deleteItem = async (id) => {
     const index = items.findIndex((it) => it.id === id)
     const item = items[index]
-    // TODO: DELETE /api/admin/equipment/:id
-    setItems((prev) => prev.filter((it) => it.id !== id))
-    setUndo({ item, index })
+    try {
+      await apiJson(`/admin/equipment/${id}`, { method: 'DELETE' })
+      setItems((prev) => prev.filter((it) => it.id !== id))
+      setUndo({ item, index })
+    } catch {
+      setError('Could not delete that item.')
+    }
   }
 
-  const undoDelete = () => {
+  const undoDelete = async () => {
     if (!undo) return
-    setItems((prev) => {
-      const next = [...prev]
-      next.splice(undo.index, 0, undo.item)
-      return next
-    })
-    setUndo(null)
+    try {
+      const recreated = await apiJson('/admin/equipment', {
+        method: 'POST',
+        json: { name: undo.item.name, iconKey: undo.item.iconKey, listed: undo.item.listed },
+      })
+      setItems((prev) => {
+        const next = [...prev]
+        next.splice(undo.index, 0, recreated)
+        return next
+      })
+    } catch {
+      setError('Could not restore that item.')
+    } finally {
+      setUndo(null)
+    }
   }
 
   return (
@@ -121,6 +143,8 @@ export default function AdminEquipment() {
             + Add equipment
           </button>
         </div>
+
+        {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
         {undo && (
           <div className="alert d-flex align-items-center justify-content-between mb-4" style={{ backgroundColor: 'var(--tw-neutral-100)' }} role="alert">
@@ -259,13 +283,15 @@ export default function AdminEquipment() {
                       Listed for booking (uncheck to pull it, e.g. for repair)
                     </label>
                   </div>
+
+                  {formError && <div className="alert alert-danger py-2 small mt-3 mb-0">{formError}</div>}
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-outline-dark" onClick={closeModal}>
                     Cancel
                   </button>
-                  <button type="submit" className="btn rounded-2 fw-semibold" style={orangeBtnVars}>
-                    {editingId ? 'Save changes' : 'Add equipment'}
+                  <button type="submit" className="btn rounded-2 fw-semibold" style={orangeBtnVars} disabled={saving}>
+                    {saving ? 'Saving…' : editingId ? 'Save changes' : 'Add equipment'}
                   </button>
                 </div>
               </form>

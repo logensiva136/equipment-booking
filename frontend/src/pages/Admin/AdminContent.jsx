@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AdminShell from '../../components/AdminShell.jsx'
+import { apiJson, ApiError } from '../../api.js'
 import { fontDisplay, fontMono, orangeBtnVars, tealCheckVars } from '../../theme.js'
 
 const SECTIONS = [
@@ -19,37 +20,19 @@ const BMI_CATEGORIES = [
   { key: 'obese', label: 'Obese' },
 ]
 
-const INITIAL_GUIDANCE_POSTS = {
-  underweight: [
-    { key: 'exercise', title: 'Exercise', body: 'Focus on strength training 3\u20134x a week to build muscle, alongside light cardio.' },
-    { key: 'meals', title: 'Meal recommendations', body: 'Add calorie-dense, nutrient-rich foods \u2014 nuts, whole milk, avocado \u2014 and an extra meal or snack a day.' },
-    { key: 'water', title: 'Water intake', body: 'Aim for about 2.5L a day, spaced through meals rather than all at once.' },
-    { key: 'calories', title: 'Daily calories', body: 'Target roughly 300\u2013500 kcal above your maintenance level to gain weight steadily.' },
-  ],
-  normal: [
-    { key: 'exercise', title: 'Exercise', body: 'Keep a balanced mix: 2\u20133 strength sessions and 2\u20133 cardio sessions a week.' },
-    { key: 'meals', title: 'Meal recommendations', body: 'Aim for a balanced plate \u2014 half vegetables, a quarter protein, a quarter whole grains.' },
-    { key: 'water', title: 'Water intake', body: 'Aim for about 2\u20132.5L a day, more on training days.' },
-    { key: 'calories', title: 'Daily calories', body: 'Eat around your maintenance level to stay at your current, healthy weight.' },
-  ],
-  overweight: [
-    { key: 'exercise', title: 'Exercise', body: 'Prioritise cardio 4\u20135x a week (brisk walking, jogging) plus 2 strength sessions.' },
-    { key: 'meals', title: 'Meal recommendations', body: 'Cut back on refined carbs and sugary drinks; fill half your plate with vegetables.' },
-    { key: 'water', title: 'Water intake', body: 'Aim for about 2.5\u20133L a day \u2014 a glass before meals can help with portion control.' },
-    { key: 'calories', title: 'Daily calories', body: 'Target a modest deficit of 300\u2013500 kcal below maintenance for gradual, sustainable loss.' },
-  ],
-  obese: [
-    { key: 'exercise', title: 'Exercise', body: 'Start with low-impact cardio (walking, swimming) 4\u20135x a week; add strength training gradually.' },
-    { key: 'meals', title: 'Meal recommendations', body: 'Work with whole foods and smaller portions, and cut back processed or fried food first.' },
-    { key: 'water', title: 'Water intake', body: 'Aim for about 3L a day, and swap sugary drinks for water where you can.' },
-    { key: 'calories', title: 'Daily calories', body: 'Aim for a steady deficit of 500\u2013750 kcal below maintenance \u2014 worth checking in with a doctor first.' },
-  ],
-}
-
 function BmiPostsEditor() {
-  const [posts, setPosts] = useState(INITIAL_GUIDANCE_POSTS)
+  const [posts, setPosts] = useState({})
+  const [loading, setLoading] = useState(true)
   const [category, setCategory] = useState('normal')
   const [savedKey, setSavedKey] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    apiJson('/content/bmi')
+      .then(setPosts)
+      .catch(() => setError('Could not load BMI guidance posts.'))
+      .finally(() => setLoading(false))
+  }, [])
 
   const updateBody = (postKey, value) => {
     setPosts((prev) => ({
@@ -58,14 +41,22 @@ function BmiPostsEditor() {
     }))
   }
 
-  const savePost = (postKey) => {
-    // TODO: PATCH /api/admin/content/bmi/:category/:postKey { body }
-    setSavedKey(postKey)
-    setTimeout(() => setSavedKey((k) => (k === postKey ? null : k)), 2000)
+  const savePost = async (postKey) => {
+    const post = posts[category].find((p) => p.key === postKey)
+    try {
+      await apiJson(`/admin/content/bmi/${category}/${postKey}`, { method: 'PATCH', json: { body: post.body } })
+      setSavedKey(postKey)
+      setTimeout(() => setSavedKey((k) => (k === postKey ? null : k)), 2000)
+    } catch {
+      setError('Could not save that post.')
+    }
   }
+
+  if (loading) return null
 
   return (
     <div>
+      {error && <div className="alert alert-danger py-2 small">{error}</div>}
       <div className="btn-group mb-4 flex-wrap" role="group" aria-label="BMI category">
         {BMI_CATEGORIES.map((c) => (
           <div key={c.key}>
@@ -86,7 +77,7 @@ function BmiPostsEditor() {
       </div>
 
       <div className="row row-cols-1 row-cols-sm-2 g-3">
-        {posts[category].map((post) => (
+        {(posts[category] || []).map((post) => (
           <div className="col" key={post.key}>
             <div className="card h-100">
               <div className="card-body d-flex flex-column">
@@ -127,22 +118,26 @@ const EXERCISE_CATEGORIES = [
   { key: 'strength', label: 'Strength Training' },
 ]
 
-const INITIAL_EXERCISES = [
-  { id: 'ex-1', title: '5-Minute Full Body Stretch', category: 'stretching', duration: '5 min', level: 'Beginner', description: 'A quick head-to-toe stretch routine to loosen up before or after activity.' },
-  { id: 'ex-2', title: 'Dynamic Warm-Up Routine', category: 'stretching', duration: '8 min', level: 'Beginner', description: 'Mobility-focused movement to prep your joints before a workout.' },
-  { id: 'ex-3', title: 'Post-Workout Cool Down', category: 'stretching', duration: '6 min', level: 'Beginner', description: 'Static stretches to bring your heart rate down and ease muscle soreness.' },
-  { id: 'ex-4', title: 'Bodyweight Strength Circuit', category: 'strength', duration: '20 min', level: 'Intermediate', description: 'A no-equipment circuit covering push, pull and leg movements.' },
-  { id: 'ex-5', title: 'Beginner Push-Up Progression', category: 'strength', duration: '10 min', level: 'Beginner', description: 'Step-by-step push-up variations to build up to a full rep.' },
-  { id: 'ex-6', title: 'Core Stability Basics', category: 'strength', duration: '12 min', level: 'Beginner', description: 'Planks, dead bugs and bird dogs for a stronger core.' },
-]
-
 const emptyExerciseForm = { title: '', category: 'stretching', duration: '', level: 'Beginner', description: '' }
 
 function ExerciseTutorialsEditor() {
-  const [exercises, setExercises] = useState(INITIAL_EXERCISES)
+  const [exercises, setExercises] = useState([])
+  const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(emptyExerciseForm)
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    apiJson('/content/exercises')
+      .then(setExercises)
+      .catch(() => setError('Could not load exercise tutorials.'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return null
 
   const openAdd = () => {
     setEditingId(null)
@@ -156,25 +151,40 @@ function ExerciseTutorialsEditor() {
     setModalOpen(true)
   }
 
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault()
     if (!form.title.trim()) return
-    // TODO: POST /api/admin/content/exercises (new) or PATCH .../:id (edit)
-    if (editingId) {
-      setExercises((prev) => prev.map((ex) => (ex.id === editingId ? { ...ex, ...form } : ex)))
-    } else {
-      setExercises((prev) => [...prev, { id: `ex-${Date.now()}`, ...form }])
+    setSaving(true)
+    setFormError('')
+    try {
+      if (editingId) {
+        const updated = await apiJson(`/admin/content/exercises/${editingId}`, { method: 'PATCH', json: form })
+        setExercises((prev) => prev.map((ex) => (ex.id === editingId ? updated : ex)))
+      } else {
+        const created = await apiJson('/admin/content/exercises', { method: 'POST', json: form })
+        setExercises((prev) => [...prev, created])
+      }
+      setModalOpen(false)
+    } catch (err) {
+      setFormError(err instanceof ApiError ? err.body?.detail || 'Could not save this tutorial.' : 'Could not reach the server.')
+    } finally {
+      setSaving(false)
     }
-    setModalOpen(false)
   }
 
-  const remove = (id) => {
-    // TODO: DELETE /api/admin/content/exercises/:id
-    setExercises((prev) => prev.filter((ex) => ex.id !== id))
+  const remove = async (id) => {
+    try {
+      await apiJson(`/admin/content/exercises/${id}`, { method: 'DELETE' })
+      setExercises((prev) => prev.filter((ex) => ex.id !== id))
+    } catch {
+      setError('Could not delete that tutorial.')
+    }
   }
 
   return (
     <div>
+      {error && <div className="alert alert-danger py-2 small">{error}</div>}
+
       <div className="d-flex justify-content-end mb-4">
         <button type="button" className="btn rounded-2 fw-semibold px-4" style={orangeBtnVars} onClick={openAdd}>
           + Add tutorial
@@ -324,13 +334,15 @@ function ExerciseTutorialsEditor() {
                       onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
                     />
                   </div>
+
+                  {formError && <div className="alert alert-danger py-2 small mt-3 mb-0">{formError}</div>}
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-outline-dark" onClick={() => setModalOpen(false)}>
                     Cancel
                   </button>
-                  <button type="submit" className="btn rounded-2 fw-semibold" style={orangeBtnVars}>
-                    {editingId ? 'Save changes' : 'Add tutorial'}
+                  <button type="submit" className="btn rounded-2 fw-semibold" style={orangeBtnVars} disabled={saving}>
+                    {saving ? 'Saving…' : editingId ? 'Save changes' : 'Add tutorial'}
                   </button>
                 </div>
               </form>

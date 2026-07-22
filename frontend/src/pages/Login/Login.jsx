@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { apiJson, ApiError } from '../../api.js'
+import { useAuth } from '../../auth.jsx'
+import { useSiteConfig } from '../../siteConfig.jsx'
 import { fontDisplay, fontMono, orangeBtnVars } from '../../theme.js'
 
 const initialForm = {
@@ -10,9 +13,12 @@ const initialForm = {
 
 export default function Login() {
   const navigate = useNavigate()
+  const { setUser } = useAuth()
+  const { siteName } = useSiteConfig()
   const [form, setForm] = useState(initialForm)
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState({})
+  const [submitting, setSubmitting] = useState(false)
 
   const setField = (field) => (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
@@ -26,16 +32,25 @@ export default function Login() {
     return next
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     const nextErrors = validate()
     setErrors(nextErrors)
-    if (Object.keys(nextErrors).length === 0) {
-      // TODO: POST to the Django Ninja backend, e.g. /api/login, with
-      // { username, password, rememberMe }. The backend resolves
-      // `username` against either a student's Matrix No. or a staff
-      // member's Staff ID, since both share the same login form.
+    if (Object.keys(nextErrors).length > 0) return
+
+    setSubmitting(true)
+    try {
+      const user = await apiJson('/login', { method: 'POST', json: form })
+      setUser(user)
       navigate('/equipment')
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setErrors({ password: err.body?.detail || 'Invalid ID number or password.' })
+      } else {
+        setErrors({ password: 'Could not reach the server. Please try again.' })
+      }
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -50,7 +65,7 @@ export default function Login() {
         }}
       >
         <span className="fs-4" style={{ ...fontDisplay, letterSpacing: '0.06em' }}>
-          FitPoly
+          {siteName}
         </span>
 
         <div>
@@ -79,7 +94,7 @@ export default function Login() {
         <div className="p-4 p-lg-5 mx-auto w-100" style={{ maxWidth: '28rem' }}>
           <div className="d-lg-none mb-4">
             <span className="fs-4" style={{ ...fontDisplay, letterSpacing: '0.06em' }}>
-              FitPoly
+              {siteName}
             </span>
             <span
               className="small text-uppercase fw-semibold d-block mt-3"
@@ -180,8 +195,8 @@ export default function Login() {
               </label>
             </div>
 
-            <button type="submit" className="btn w-100 rounded-2 fw-semibold py-2" style={orangeBtnVars}>
-              Log in
+            <button type="submit" className="btn w-100 rounded-2 fw-semibold py-2" style={orangeBtnVars} disabled={submitting}>
+              {submitting ? 'Logging in…' : 'Log in'}
             </button>
 
             <p className="text-center small text-body-secondary mt-3 mb-0">

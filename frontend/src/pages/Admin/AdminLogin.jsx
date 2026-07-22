@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { apiJson, ApiError } from '../../api.js'
+import { useAuth } from '../../auth.jsx'
+import { useSiteConfig } from '../../siteConfig.jsx'
 import { fontDisplay, fontMono, orangeBtnVars } from '../../theme.js'
 
 const initialForm = {
@@ -10,9 +13,12 @@ const initialForm = {
 
 export default function AdminLogin() {
   const navigate = useNavigate()
+  const { setUser } = useAuth()
+  const { siteName } = useSiteConfig()
   const [form, setForm] = useState(initialForm)
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState({})
+  const [submitting, setSubmitting] = useState(false)
 
   const setField = (field) => (e) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
@@ -26,16 +32,25 @@ export default function AdminLogin() {
     return next
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     const nextErrors = validate()
     setErrors(nextErrors)
-    if (Object.keys(nextErrors).length === 0) {
-      // TODO: POST to the Django Ninja backend, e.g. /api/admin/login,
-      // with { username, password, rememberMe }. Keep this endpoint
-      // separate from the student/staff /api/login so an admin
-      // session can carry different permissions from the start.
+    if (Object.keys(nextErrors).length > 0) return
+
+    setSubmitting(true)
+    try {
+      const user = await apiJson('/admin/login', { method: 'POST', json: form })
+      setUser(user)
       navigate('/admin/dashboard')
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setErrors({ password: err.body?.detail || 'Invalid username or password.' })
+      } else {
+        setErrors({ password: 'Could not reach the server. Please try again.' })
+      }
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -51,7 +66,7 @@ export default function AdminLogin() {
       >
         <div className="d-flex align-items-center gap-2">
           <span className="fs-4" style={{ ...fontDisplay, letterSpacing: '0.06em' }}>
-            FitPoly
+            {siteName}
           </span>
           <span
             className="badge rounded-pill"
@@ -73,7 +88,7 @@ export default function AdminLogin() {
             <span className="d-block">COURT.</span>
           </h1>
           <p className="fs-5 opacity-75 mt-3" style={{ maxWidth: '30ch' }}>
-            Manage bookings, equipment and guidance content across FitPoly from one place.
+            Manage bookings, equipment and guidance content across {siteName} from one place.
           </p>
         </div>
 
@@ -87,7 +102,7 @@ export default function AdminLogin() {
         <div className="p-4 p-lg-5 mx-auto w-100" style={{ maxWidth: '28rem' }}>
           <div className="d-lg-none mb-4 d-flex align-items-center gap-2">
             <span className="fs-4" style={{ ...fontDisplay, letterSpacing: '0.06em' }}>
-              FitPoly
+              {siteName}
             </span>
             <span
               className="badge rounded-pill"
@@ -189,8 +204,8 @@ export default function AdminLogin() {
               </label>
             </div>
 
-            <button type="submit" className="btn w-100 rounded-2 fw-semibold py-2" style={orangeBtnVars}>
-              Sign in
+            <button type="submit" className="btn w-100 rounded-2 fw-semibold py-2" style={orangeBtnVars} disabled={submitting}>
+              {submitting ? 'Signing in…' : 'Sign in'}
             </button>
 
             <p className="text-center small text-body-secondary mt-3 mb-0">

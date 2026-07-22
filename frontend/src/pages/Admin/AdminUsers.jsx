@@ -1,81 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AdminShell from '../../components/AdminShell.jsx'
+import { apiJson } from '../../api.js'
 import { fontDisplay, fontMono, orangeBtnVars, tealCheckVars } from '../../theme.js'
-
-// Mock data -- real data via GET /api/admin/users. Mirrors the fields
-// captured at registration (gender/height/weight feed the BMI guide).
-const INITIAL_USERS = [
-  {
-    id: 'u1',
-    name: 'Ahmad Faiz',
-    role: 'Student',
-    idLabel: 'Matrix No.',
-    idNumber: '21DTK21F1002',
-    email: 'ahmad.faiz@student.polytechnic.edu.my',
-    phone: '012-3456789',
-    gender: 'Male',
-    height: 172,
-    weight: 68,
-    verified: true,
-    registered: '3 Feb 2026',
-  },
-  {
-    id: 'u2',
-    name: 'Nur Aisyah Rahman',
-    role: 'Student',
-    idLabel: 'Matrix No.',
-    idNumber: '24DTK21F1102',
-    email: 'nur.aisyah@student.polytechnic.edu.my',
-    phone: '019-2345678',
-    gender: 'Female',
-    height: 160,
-    weight: 52,
-    verified: false,
-    registered: '2 hours ago',
-  },
-  {
-    id: 'u3',
-    name: 'Haziq Rahman',
-    role: 'Student',
-    idLabel: 'Matrix No.',
-    idNumber: '21DEE22F0456',
-    email: 'haziq.rahman@student.polytechnic.edu.my',
-    phone: '013-7654321',
-    gender: 'Male',
-    height: 178,
-    weight: 74,
-    verified: false,
-    registered: '5 hours ago',
-  },
-  {
-    id: 'u4',
-    name: 'Farah Idris',
-    role: 'Staff',
-    idLabel: 'Staff ID',
-    idNumber: 'STF-0118',
-    email: 'farah.idris@polytechnic.edu.my',
-    phone: '017-8901234',
-    gender: 'Female',
-    height: 165,
-    weight: 58,
-    verified: false,
-    registered: 'Yesterday',
-  },
-  {
-    id: 'u5',
-    name: 'Nur Aisyah',
-    role: 'Staff',
-    idLabel: 'Staff ID',
-    idNumber: 'STF-0031',
-    email: 'aisyah.staff@polytechnic.edu.my',
-    phone: '011-2233445',
-    gender: 'Female',
-    height: 158,
-    weight: 55,
-    verified: true,
-    registered: '14 Jan 2026',
-  },
-]
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -85,10 +11,21 @@ const FILTERS = [
 ]
 
 export default function AdminUsers() {
-  const [users, setUsers] = useState(INITIAL_USERS)
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [query, setQuery] = useState('')
   const [activeUser, setActiveUser] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    apiJson('/admin/users')
+      .then(setUsers)
+      .catch(() => setError('Could not load users.'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <AdminShell><div className="p-3 p-lg-5" /></AdminShell>
 
   const filtered = users.filter((u) => {
     const matchesFilter =
@@ -101,10 +38,14 @@ export default function AdminUsers() {
     return matchesFilter && matchesQuery
   })
 
-  const setVerified = (id, verified) => {
-    // TODO: POST /api/admin/users/:id/{approve,reject}
-    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, verified } : u)))
-    setActiveUser((prev) => (prev && prev.id === id ? { ...prev, verified } : prev))
+  const setVerified = async (id, verified) => {
+    try {
+      const updated = await apiJson(`/admin/users/${id}/${verified ? 'approve' : 'reject'}`, { method: 'POST' })
+      setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)))
+      setActiveUser((prev) => (prev && prev.id === id ? updated : prev))
+    } catch {
+      setError('Could not update that user.')
+    }
   }
 
   const bmi = (h, w) => (h > 0 ? (w / (h / 100) ** 2).toFixed(1) : '\u2014')
@@ -154,6 +95,8 @@ export default function AdminUsers() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+
+        {error && <div className="alert alert-danger py-2 small">{error}</div>}
 
         {filtered.length === 0 ? (
           <div className="text-center py-5 text-body-secondary">

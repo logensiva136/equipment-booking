@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../auth.jsx'
+import { useSiteConfig } from '../siteConfig.jsx'
 import { fontDisplay, fontMono } from '../theme.js'
 
 const NAV_ITEMS = [
@@ -90,7 +92,14 @@ function SidebarLinks({ pathname, onNavigate }) {
 export default function AdminShell({ children }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const { logout } = useAuth()
+  const { siteName } = useSiteConfig()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const handleLogout = async () => {
+    await logout()
+    navigate('/admin/login')
+  }
 
   return (
     <div className="d-flex min-vh-100">
@@ -102,7 +111,7 @@ export default function AdminShell({ children }) {
         <div>
           <div className="d-flex align-items-center gap-2 px-2 mb-4 mt-2">
             <span className="fs-5 text-white" style={{ ...fontDisplay, letterSpacing: '0.06em' }}>
-              FitPoly
+              {siteName}
             </span>
             <span
               className="badge rounded-pill"
@@ -117,7 +126,7 @@ export default function AdminShell({ children }) {
         <button
           type="button"
           className="btn btn-outline-light btn-sm rounded-2 fw-semibold"
-          onClick={() => navigate('/admin/login')}
+          onClick={handleLogout}
         >
           Log out
         </button>
@@ -127,7 +136,7 @@ export default function AdminShell({ children }) {
       <div className="d-lg-none position-fixed top-0 start-0 end-0 bg-white border-bottom d-flex align-items-center justify-content-between p-3" style={{ zIndex: 10 }}>
         <div className="d-flex align-items-center gap-2">
           <span className="fs-5" style={{ ...fontDisplay, letterSpacing: '0.06em' }}>
-            FitPoly
+            {siteName}
           </span>
           <span
             className="badge rounded-pill"
