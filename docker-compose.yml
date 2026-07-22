@@ -1,0 +1,23 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      # Anonymous volume so the container's own Linux .venv (built by
+      # `uv sync` during the image build) isn't shadowed by a host
+      # .venv from a different OS/architecture.
+      - /app/.venv
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      # Same idea as backend's .venv: keep the container's own
+      # node_modules instead of whatever (or nothing) is on the host.
+      - /app/node_modules
+    depends_on:
+      - backend
