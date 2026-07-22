@@ -16,8 +16,12 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-install-project
 
 COPY . .
-RUN uv sync --locked && chmod +x docker-entrypoint.sh
+RUN uv sync --locked
 
 EXPOSE 8000
 
-ENTRYPOINT ["./docker-entrypoint.sh"]
+# Invoked via `sh` rather than executed directly, so this doesn't depend
+# on the executable bit surviving git/bind-mounts across OSes -- the dev
+# compose setup bind-mounts ./backend over /app at container start,
+# which would otherwise shadow any chmod +x done at build time.
+ENTRYPOINT ["sh", "docker-entrypoint.sh"]
